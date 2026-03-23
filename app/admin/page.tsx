@@ -88,7 +88,7 @@ const [bookingsLoading, setBookingsLoading] = useState(true);
       }
 
       try {
-        const meRes = await fetch("http://localhost:5000/api/auth/me", {
+        const meRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -108,7 +108,7 @@ const [bookingsLoading, setBookingsLoading] = useState(true);
 
         setCurrentUser(meData);
 
-        const usersRes = await fetch("http://localhost:5000/api/auth/users", {
+        const usersRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/users`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -121,7 +121,7 @@ const [bookingsLoading, setBookingsLoading] = useState(true);
         }
 
         const paymentsRes = await fetch(
-          "http://localhost:5000/api/payments/all",
+          `${process.env.NEXT_PUBLIC_API_URL}/api/payments/all`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -143,7 +143,7 @@ const [bookingsLoading, setBookingsLoading] = useState(true);
         setBookingsLoading(false);
       }
 
-      const bookingsRes = await fetch("http://localhost:5000/api/bookings/all", {
+      const bookingsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/all`, {
   headers: {
     Authorization: `Bearer ${token}`,
   },
@@ -180,7 +180,7 @@ if (bookingsRes.ok) {
       setError("");
       setSuccessMessage("");
 
-      const res = await fetch("http://localhost:5000/api/auth/membership", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/membership`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -210,7 +210,7 @@ if (bookingsRes.ok) {
 
       setSuccessMessage("Membership updated successfully ✅");
 
-      const usersRes = await fetch("http://localhost:5000/api/auth/users", {
+      const usersRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/users`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -260,7 +260,7 @@ if (bookingsRes.ok) {
   try {
     setError("");
 
-    const res = await fetch("http://localhost:5000/api/bookings/status", {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/status`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -279,7 +279,7 @@ if (bookingsRes.ok) {
       return;
     }
 
-    const bookingsRes = await fetch("http://localhost:5000/api/bookings/all", {
+    const bookingsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/all`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

@@ -78,7 +78,7 @@ export default function PaymentsPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/payments/my", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/payments/my`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -105,7 +105,7 @@ export default function PaymentsPage() {
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/auth/me", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -188,7 +188,7 @@ export default function PaymentsPage() {
 
       // Step 1: prepare PayHere-ready checkout data
       const payhereRes = await fetch(
-        "http://localhost:5000/api/payments/payhere-data",
+        `${process.env.NEXT_PUBLIC_API_URL}/api/payments/payhere-data`,
         {
           method: "POST",
           headers: {
@@ -219,7 +219,7 @@ if (useRealPayHere) {
 }
 
       // Step 2: current test payment flow
-      const createRes = await fetch("http://localhost:5000/api/payments", {
+      const createRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/payments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -241,7 +241,7 @@ if (useRealPayHere) {
       const paymentId = createData.payment._id;
 
       const markPaidRes = await fetch(
-        "http://localhost:5000/api/payments/mark-paid",
+        `${process.env.NEXT_PUBLIC_API_URL}/api/payments/mark-paid`,
         {
           method: "PUT",
           headers: {

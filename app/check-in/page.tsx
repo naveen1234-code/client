@@ -37,7 +37,7 @@ export default function CheckInPage() {
       }
 
       try {
-        const res = await fetch("http://localhost:5000/api/auth/me", {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -86,7 +86,7 @@ export default function CheckInPage() {
       setMessage("");
       setError("");
 
-      const res = await fetch("http://localhost:5000/api/auth/check-in", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

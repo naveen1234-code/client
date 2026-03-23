@@ -46,13 +46,13 @@ const [bookingsLoading, setBookingsLoading] = useState(true);
 
     try {
       const [userRes, bookingsRes] = await Promise.all([
-        fetch("http://localhost:5000/api/auth/me", {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }),
-        fetch("http://localhost:5000/api/bookings/my", {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/my`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
