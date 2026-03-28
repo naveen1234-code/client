@@ -7,9 +7,10 @@ export default function Home() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+const [loadingProgress, setLoadingProgress] = useState(0);
+const [isLoggedIn, setIsLoggedIn] = useState(false);
+const [scrolled, setScrolled] = useState(false);
+const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -17,30 +18,45 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const elements = document.querySelectorAll(".motion-fade-up");
+  const elements = document.querySelectorAll(".motion-fade-up");
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("animate-in");
-          }
-        });
-      },
-      { threshold: 0.18 }
-    );
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("animate-in");
+        }
+      });
+    },
+    { threshold: 0.18 }
+  );
 
-    elements.forEach((el) => observer.observe(el));
+  elements.forEach((el) => observer.observe(el));
 
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 2400);
+  let progress = 0;
 
-    return () => {
-      observer.disconnect();
-      clearTimeout(timer);
-    };
-  }, []);
+  const progressTimer = setInterval(() => {
+    progress += Math.random() * 18;
+
+    if (progress >= 100) {
+      progress = 100;
+      setLoadingProgress(100);
+
+      clearInterval(progressTimer);
+
+      setTimeout(() => {
+        setLoading(false);
+      }, 250);
+    } else {
+      setLoadingProgress(Math.floor(progress));
+    }
+  }, 180);
+
+  return () => {
+    observer.disconnect();
+    clearInterval(progressTimer);
+  };
+}, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -63,43 +79,82 @@ export default function Home() {
   return (
     <>
       {/* CINEMATIC INTRO */}
-      <div
-        className={`fixed inset-0 z-[999] overflow-hidden bg-black transition-all duration-700 ${
-          loading
-            ? "visible opacity-100"
-            : "invisible pointer-events-none opacity-0"
-        }`}
-      >
-        {/* Background glows */}
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(220,38,38,0.18),transparent_35%),radial-gradient(circle_at_bottom_right,rgba(220,38,38,0.12),transparent_30%)]" />
-        <div className="absolute inset-0 opacity-[0.06] [background-image:linear-gradient(rgba(255,255,255,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.12)_1px,transparent_1px)] [background-size:42px_42px]" />
+<div
+  className={`fixed inset-0 z-[999] overflow-hidden bg-black transition-all duration-700 ${
+    loading
+      ? "visible opacity-100"
+      : "invisible pointer-events-none opacity-0"
+  }`}
+>
+  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(239,68,68,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(239,68,68,0.12),transparent_30%),linear-gradient(180deg,#020202_0%,#090909_50%,#030303_100%)]" />
 
-        <div className="relative z-10 flex h-full items-center justify-center px-6">
-          <div className="text-center">
-            <div className="mx-auto flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl border border-red-900/40 bg-red-600/10 shadow-[0_0_45px_rgba(220,38,38,0.18)]">
-              <span className="font-display text-4xl font-bold uppercase text-red-500">
-                R
-              </span>
-            </div>
+<div className="absolute inset-0 overflow-hidden">
+  <div className="absolute -left-16 top-0 h-[260px] w-[260px] rounded-full bg-red-600/12 blur-3xl animate-[pulseRedBgSoft_5s_ease-in-out_infinite]" />
+  <div className="absolute right-[-60px] bottom-[-40px] h-[240px] w-[240px] rounded-full bg-red-500/10 blur-3xl animate-[pulseRedBgSoft_6.5s_ease-in-out_infinite]" />
+</div>
 
-            <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.42em] text-red-500 animate-[fadeUp_0.8s_ease-out]">
-              Warrior Performance Gym
-            </p>
+<div className="absolute inset-0 overflow-hidden">
+  <div className="absolute left-[-12%] top-[65%] h-[3px] w-[65%] rotate-[-32deg] rounded-full bg-gradient-to-r from-transparent via-blue-400 to-transparent opacity-90 blur-[1px] animate-[streakBlue_3.8s_linear_infinite]" />
+  <div className="absolute left-[-18%] top-[72%] h-[2px] w-[58%] rotate-[-32deg] rounded-full bg-gradient-to-r from-transparent via-cyan-300 to-transparent opacity-70 blur-[1px] animate-[streakBlue_4.5s_linear_infinite]" />
+  <div className="absolute left-[40%] top-[22%] h-[3px] w-[62%] rotate-[-32deg] rounded-full bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-95 blur-[1px] animate-[streakRed_4s_linear_infinite]" />
+  <div className="absolute left-[48%] top-[30%] h-[2px] w-[54%] rotate-[-32deg] rounded-full bg-gradient-to-r from-transparent via-orange-400 to-transparent opacity-80 blur-[1px] animate-[streakRed_5s_linear_infinite]" />
 
-            <h1 className="mt-4 font-display text-4xl font-bold uppercase tracking-[0.28em] text-white md:text-6xl animate-[fadeUp_1s_ease-out]">
-              GYM RAVANA
-            </h1>
+  <div className="absolute left-[-8%] top-[55%] h-[220px] w-[220px] rounded-full bg-blue-500/12 blur-3xl animate-[pulseBlueBg_4s_ease-in-out_infinite]" />
+  <div className="absolute right-[-6%] top-[12%] h-[220px] w-[220px] rounded-full bg-red-500/12 blur-3xl animate-[pulseRedBg_4s_ease-in-out_infinite]" />
+</div>
+  <div className="relative z-10 flex h-full items-center justify-center px-6">
+    <div className="text-center">
+      <div className="mx-auto flex items-center justify-center gap-5 sm:gap-7">
+        <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl border border-red-900/40 bg-red-600/10 shadow-[0_0_45px_rgba(220,38,38,0.22)]">
+          <img
+            src="/gym-logo.png"
+            alt="Gym Ravana Logo"
+            className="h-12 w-12 object-contain sm:h-14 sm:w-14"
+          />
+        </div>
 
-            <p className="mt-5 text-[11px] uppercase tracking-[0.35em] text-gray-400 animate-[fadeUp_1.15s_ease-out]">
-              Strength • Discipline • Power
-            </p>
+        <span className="text-2xl font-black text-white/75 sm:text-3xl">×</span>
 
-            <div className="mx-auto mt-8 h-[2px] w-48 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full w-full origin-left animate-[loaderBar_2.1s_ease-in-out] bg-gradient-to-r from-red-700 via-red-500 to-red-700" />
-            </div>
-          </div>
+        <div className="flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl border border-blue-900/40 bg-blue-600/10 shadow-[0_0_45px_rgba(59,130,246,0.22)]">
+          <img
+            src="/zyverion-logo.png"
+            alt="Zyverion Logo"
+            className="h-11 w-11 object-contain sm:h-12 sm:w-12"
+          />
         </div>
       </div>
+
+      <p className="mt-8 text-[11px] font-semibold uppercase tracking-[0.42em] text-red-500 animate-[fadeUp_0.8s_ease-out]">
+        Warrior Performance Gym
+      </p>
+
+      <h1 className="mt-4 font-display text-4xl font-bold uppercase tracking-[0.28em] text-white md:text-6xl animate-[fadeUp_1s_ease-out]">
+        GYM RAVANA
+      </h1>
+
+      <p className="mt-5 text-[11px] uppercase tracking-[0.35em] text-gray-400 animate-[fadeUp_1.15s_ease-out]">
+        Strength • Discipline • Power
+      </p>
+
+      <div className="mx-auto mt-8 w-48 sm:w-56">
+  <div className="h-[3px] overflow-hidden rounded-full bg-white/10">
+    <div
+      className="h-full rounded-full bg-gradient-to-r from-red-500 via-orange-400 to-blue-500 transition-all duration-200"
+      style={{ width: `${loadingProgress}%` }}
+    />
+  </div>
+
+  <p className="mt-3 text-[10px] uppercase tracking-[0.28em] text-gray-500">
+    Loading {loadingProgress}%
+  </p>
+</div>
+
+      <p className="mt-5 text-[10px] uppercase tracking-[0.34em] text-gray-500 animate-[fadeUp_1.2s_ease-out]">
+        Powered by <span className="font-bold text-blue-400">ZYVERION</span>
+      </p>
+    </div>
+  </div>
+</div>
 
       <main id="top" className="bg-black text-white pt-[92px] overflow-x-hidden">
         {/* TOP STRIP */}
@@ -167,19 +222,14 @@ export default function Home() {
         <a href="#contact" className="relative pb-1 transition hover:text-red-500 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-red-500 after:transition-all after:duration-300 hover:after:w-full">
           Contact
         </a>
-        <a
-  href="/dashboard"
-  className="relative pb-1 transition hover:text-red-500 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-red-500 after:transition-all after:duration-300 hover:after:w-full"
->
-  Dashboard
-</a>
 
-<a
-  href="/check-in"
-  className="relative pb-1 transition hover:text-red-500 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-red-500 after:transition-all after:duration-300 hover:after:w-full"
->
-  Check-In
+        <a href="/terms" className="relative pb-1 transition hover:text-red-500 after:absolute after:bottom-0 after:left-0 after:h-[2px] after:w-0 after:bg-red-500 after:transition-all after:duration-300 hover:after:w-full">
+  Terms
 </a>
+        
+        
+
+
       </div>
 
       {/* RIGHT SIDE */}
@@ -342,6 +392,14 @@ export default function Home() {
       >
         Contact
       </a>
+
+      <a
+  href="/terms"
+  onClick={() => setMobileMenuOpen(false)}
+  className="border-b border-white/10 py-4 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:text-red-500"
+>
+  Terms
+</a>
 
       <div className="mt-6 flex flex-col gap-3">
   <a
@@ -1259,7 +1317,7 @@ export default function Home() {
                       Call Us
                     </h3>
                     <p className="mt-4 text-lg text-gray-300">
-                      +94 XX XXX XXXX
+                      +94 76 551 9293
                     </p>
                     <p className="mt-2 text-sm text-gray-500">
                       For quick inquiries and membership details
@@ -1432,7 +1490,7 @@ export default function Home() {
 
                 <div className="mt-4 flex flex-col gap-3 text-sm text-gray-400">
                   <p>Ragama, Sri Lanka</p>
-                  <p>+94 XX XXX XXXX</p>
+                  <p>+94 76 551 9293</p>
                   <p>gymravana@email.com</p>
                 </div>
               </div>

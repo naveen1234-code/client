@@ -42,10 +42,15 @@ export default function LoginPage() {
         setMessage(data.message || "Login failed");
       } else {
         localStorage.setItem("token", data.token);
-        setMessage("Login successful ✅ Redirecting...");
-        setTimeout(() => {
-          router.push("/dashboard");
-        }, 900);
+setMessage("Login successful ✅ Redirecting...");
+
+setTimeout(() => {
+  if (data.user?.role === "admin") {
+    router.push("/admin");
+  } else {
+    router.push("/access");
+  }
+}, 900);
       }
     } catch (error) {
       setMessage("Error connecting to server");
@@ -140,18 +145,29 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                placeholder="Enter your password"
-                value={formData.password}
-                onChange={handleChange}
-                className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-              />
-            </div>
+  <div className="mb-2 flex items-center justify-between">
+    <label className="block text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+      Password
+    </label>
+
+    <button
+      type="button"
+      onClick={() => router.push("/forgot-password")}
+      className="text-[11px] font-bold uppercase tracking-[0.18em] text-red-400 transition hover:text-red-300"
+    >
+      Forgot Password?
+    </button>
+  </div>
+
+  <input
+    type="password"
+    name="password"
+    placeholder="Enter your password"
+    value={formData.password}
+    onChange={handleChange}
+    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+  />
+</div>
 
             <button
               type="submit"

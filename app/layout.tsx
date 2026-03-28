@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
+import Script from "next/script";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -16,6 +17,12 @@ const oswald = Oswald({
 export const metadata: Metadata = {
   title: "GYM RAVANA",
   description: "Strength • Discipline • Power",
+  manifest: "/manifest.json",
+  themeColor: "#dc2626",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
 };
 
 export default function RootLayout({
@@ -26,8 +33,19 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${oswald.variable} font-sans bg-black text-white`}>
-        {children}
-      </body>
+  {children}
+  <Script id="register-sw" strategy="afterInteractive">
+    {`
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("/sw.js").catch(function (err) {
+            console.log("Service worker registration failed:", err);
+          });
+        });
+      }
+    `}
+  </Script>
+</body>
     </html>
   );
 }

@@ -1,0 +1,244 @@
+"use client";
+
+import PageTransition from "@/components/PageTransition";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
+type UserType = {
+  name: string;
+  email: string;
+  role: string;
+  membershipStatus: string;
+  membershipPlan: string;
+  remainingDays: number;
+  attendanceCount: number;
+};
+
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
+};
+
+export default function AccessPage() {
+  const router = useRouter();
+
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserType | null>(null);
+  const [error, setError] = useState("");
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          localStorage.removeItem("token");
+          router.push("/login");
+          return;
+        }
+
+        setUser(data);
+      } catch {
+        setError("Failed to load access app");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [router]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) {
+      setShowInstallHelp(true);
+      return;
+    }
+
+    setShowInstallHelp(false);
+    await installPrompt.prompt();
+
+    const choiceResult = await installPrompt.userChoice;
+
+    if (choiceResult.outcome === "accepted") {
+      setInstallPrompt(null);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    router.push("/login");
+  };
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-8 py-6 text-center shadow-2xl">
+          Loading access app...
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <PageTransition>
+      <main className="relative min-h-screen overflow-hidden bg-black px-4 py-8 text-white sm:px-6">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-[-120px] top-[100px] h-[260px] w-[260px] rounded-full bg-red-600/20 blur-3xl" />
+          <div className="absolute right-[-80px] top-[140px] h-[220px] w-[220px] rounded-full bg-red-500/10 blur-3xl" />
+          <div className="absolute bottom-[-100px] left-1/2 h-[260px] w-[260px] -translate-x-1/2 rounded-full bg-red-700/10 blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,0,0,0.12),transparent_35%)]" />
+        </div>
+
+        <div className="relative mx-auto max-w-2xl">
+          <div className="rounded-[30px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur sm:p-8">
+            <div className="text-center">
+              <p className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-400">
+                Gym Ravana Access App
+              </p>
+
+              <h1 className="mt-4 text-3xl font-black uppercase tracking-tight text-white sm:text-5xl">
+                Quick Member Access
+              </h1>
+
+              <p className="mt-3 text-sm text-gray-400 sm:text-base">
+                Fast gym entry and exit from your phone. Use this screen daily, and open the full account page only when you need more details.
+              </p>
+            </div>
+
+            {error && (
+              <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm font-semibold text-red-300">
+                {error}
+              </div>
+            )}
+
+            {user && (
+              <>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                      Member
+                    </p>
+                    <p className="mt-2 text-xl font-black text-white">{user.name}</p>
+                    <p className="mt-1 break-all text-sm text-gray-400">{user.email}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                      Membership Status
+                    </p>
+                    <p className="mt-2 text-xl font-black text-yellow-400">
+                      {user.membershipStatus}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-400">{user.membershipPlan}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-green-300">
+                      Remaining Days
+                    </p>
+                    <p className="mt-2 text-4xl font-black text-green-400">
+                      {user.remainingDays}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-blue-300">
+                      Attendance Count
+                    </p>
+                    <p className="mt-2 text-4xl font-black text-blue-400">
+                      {user.attendanceCount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4">
+                  <button
+                    onClick={() => router.push("/check-in?mode=entry")}
+                    className="w-full rounded-2xl bg-red-600 px-6 py-5 text-base font-black uppercase tracking-[0.18em] text-white shadow-[0_0_30px_rgba(255,0,0,0.25)] transition duration-300 hover:scale-[1.01] hover:bg-red-700"
+                  >
+                    Entry Scan
+                  </button>
+
+                  <button
+                    onClick={() => router.push("/check-in?mode=exit")}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-base font-black uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/30 hover:bg-red-500/10"
+                  >
+                    Exit Scan
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={handleInstallApp}
+                    className="rounded-2xl bg-red-600 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
+                  >
+                    Install App
+                  </button>
+
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+                  >
+                    View Full Account
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+                  >
+                    Logout
+                  </button>
+                </div>
+
+                {showInstallHelp && (
+                  <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-200">
+                    If the install popup does not appear, open your browser menu and choose{" "}
+                    <span className="font-bold text-white">Add to Home Screen</span> or{" "}
+                    <span className="font-bold text-white">Install App</span>.
+                  </div>
+                )}
+
+                <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                    Easy Daily Use
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-gray-300">
+                    For the easiest experience, install this access app once and open it from your phone home screen every time you come to the gym.
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+    </PageTransition>
+  );
+}

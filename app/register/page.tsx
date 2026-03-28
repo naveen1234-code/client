@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import SignatureCanvas from "react-signature-canvas";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const signatureRef = useRef<SignatureCanvas | null>(null);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -34,11 +36,15 @@ export default function RegisterPage() {
     payment: "",
     email: "",
     password: "",
+    memberSignature: "",
   });
 
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+const [error, setError] = useState("");
+const [success, setSuccess] = useState("");
+const [showTermsPopup, setShowTermsPopup] = useState(false);
+const [termsAccepted, setTermsAccepted] = useState(false);
+const [showAccessAppPopup, setShowAccessAppPopup] = useState(false);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -60,9 +66,36 @@ export default function RegisterPage() {
     }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveSignature = () => {
+    if (!signatureRef.current || signatureRef.current.isEmpty()) {
+      setError("Please add member signature");
+      return;
+    }
 
+    const signatureDataUrl = signatureRef.current
+      .getTrimmedCanvas()
+      .toDataURL("image/jpeg");
+
+    setFormData((prev) => ({
+      ...prev,
+      memberSignature: signatureDataUrl,
+    }));
+
+    setError("");
+  };
+
+  const handleClearSignature = () => {
+    if (signatureRef.current) {
+      signatureRef.current.clear();
+    }
+
+    setFormData((prev) => ({
+      ...prev,
+      memberSignature: "",
+    }));
+  };
+
+  const submitRegistration = async () => {
     try {
       setLoading(true);
       setError("");
@@ -84,19 +117,28 @@ export default function RegisterPage() {
       }
 
       setSuccess("Member registered successfully");
-
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
-
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1200);
-    } catch (err) {
+setShowAccessAppPopup(true);
+    } catch {
       setError("Something went wrong");
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setShowTermsPopup(true);
+  };
+
+  const handleConfirmTermsAndSubmit = async () => {
+    if (!termsAccepted) {
+      setError("You must agree to the Terms & Conditions before submitting.");
+      return;
+    }
+
+    setShowTermsPopup(false);
+    await submitRegistration();
   };
 
   return (
@@ -431,8 +473,7 @@ export default function RegisterPage() {
               </div>
             </div>
           </section>
-
-          <section className="mt-6">
+    <section className="mt-6">
             <h4 className="border border-black bg-neutral-100 p-2 text-center text-lg font-bold">
               Payment Details
             </h4>
@@ -505,16 +546,42 @@ export default function RegisterPage() {
             </div>
           )}
 
-          <section className="mt-10 grid grid-cols-2 text-center">
-            <div>
-              <div className="mx-auto mt-10 w-40 border-t border-black"></div>
-              <p className="mt-2">Instructor</p>
+          <section className="mt-8 border border-black p-4">
+            <h4 className="mb-4 text-center text-lg font-bold">Member Signature</h4>
+
+            <div className="border border-black bg-white">
+              <SignatureCanvas
+                ref={signatureRef}
+                penColor="black"
+                canvasProps={{
+                  className: "h-40 w-full",
+                }}
+              />
             </div>
 
-            <div>
-              <div className="mx-auto mt-10 w-40 border-t border-black"></div>
-              <p className="mt-2">Member</p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={handleSaveSignature}
+                className="rounded border border-black px-4 py-2 text-sm font-bold transition hover:bg-black hover:text-white"
+              >
+                Save Signature
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearSignature}
+                className="rounded border border-black px-4 py-2 text-sm font-bold transition hover:bg-black hover:text-white"
+              >
+                Clear Signature
+              </button>
             </div>
+
+            {formData.memberSignature && (
+              <p className="mt-3 text-sm font-semibold text-green-700">
+                Signature saved successfully
+              </p>
+            )}
           </section>
 
           <button
@@ -526,6 +593,114 @@ export default function RegisterPage() {
           </button>
         </form>
       </div>
+
+      {showTermsPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-black bg-white p-4 shadow-2xl sm:p-6">
+            <h3 className="text-center text-2xl font-black uppercase tracking-wide text-black">
+              Terms & Conditions Agreement
+            </h3>
+
+            <p className="mt-3 text-center text-sm font-semibold text-neutral-700">
+              Please review the Gym Ravana Terms & Conditions before final submission.
+            </p>
+
+            <div className="mt-5 overflow-hidden border border-black">
+              <img
+                src="/images/gym-ravana-terms.jpeg"
+                alt="Gym Ravana Terms and Conditions"
+                className="w-full object-contain"
+              />
+            </div>
+
+            <div className="mt-5 flex flex-col gap-4">
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center border border-black px-4 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
+              >
+                Open Full Terms Page
+              </a>
+
+              <label className="flex items-start gap-3 text-sm font-semibold leading-6 text-black">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={(e) => setTermsAccepted(e.target.checked)}
+                  className="mt-1 h-4 w-4"
+                />
+                <span>I have read and agree to the Gym Ravana Terms & Conditions.</span>
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTermsPopup(false);
+                  setTermsAccepted(false);
+                }}
+                className="border border-black px-5 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmTermsAndSubmit}
+                disabled={loading}
+                className="bg-black px-5 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {loading ? "Submitting..." : "Agree & Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showAccessAppPopup && (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 px-4">
+    <div className="w-full max-w-lg rounded-2xl border border-black bg-white p-5 shadow-2xl sm:p-6">
+      <h3 className="text-center text-2xl font-black uppercase tracking-wide text-black">
+        Registration Successful
+      </h3>
+
+      <p className="mt-3 text-center text-sm font-semibold text-neutral-700">
+        Your Gym Ravana account has been created successfully.
+      </p>
+
+      <div className="mt-5 rounded-xl border border-black bg-neutral-50 p-4 text-center">
+        <p className="text-base font-black uppercase tracking-wide text-black">
+          Install Access App
+        </p>
+        <p className="mt-2 text-sm leading-6 text-neutral-700">
+          For easier gym entry, install the Access App on your phone home screen after login.
+        </p>
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={() => {
+            setShowAccessAppPopup(false);
+            router.push("/login");
+          }}
+          className="border border-black px-5 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
+        >
+          Go to Login
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowAccessAppPopup(false)}
+          className="bg-black px-5 py-3 text-sm font-bold uppercase tracking-wide text-white transition hover:bg-neutral-800"
+        >
+          Maybe Later
+        </button>
+      </div>
+    </div>
+  </div>
+)}
     </main>
   );
 }
