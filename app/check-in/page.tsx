@@ -1,7 +1,7 @@
 "use client";
 
 import PageTransition from "@/components/PageTransition";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 
@@ -20,7 +20,7 @@ type UserType = {
 
 type AccessMode = "entry" | "exit";
 
-export default function CheckInPage() {
+function CheckInPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const scannerRef = useRef<Html5Qrcode | null>(null);
@@ -518,5 +518,22 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
         </div>
       </main>
     </PageTransition>
+  );
+}
+export default function CheckInPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-black text-white">
+          <div className="rounded-2xl border border-white/10 bg-white/5 px-8 py-6 text-center shadow-2xl">
+            <p className="text-lg tracking-wide text-gray-300">
+              Loading scanner...
+            </p>
+          </div>
+        </main>
+      }
+    >
+      <CheckInPageContent />
+    </Suspense>
   );
 }
