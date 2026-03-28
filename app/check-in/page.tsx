@@ -23,24 +23,23 @@ type AccessMode = "entry" | "exit";
 function CheckInPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const scannerRunningRef = useRef(false);
-const scanLockRef = useRef(false);
-const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scanLockRef = useRef(false);
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [user, setUser] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
-
   const [mode, setMode] = useState<AccessMode>("entry");
-
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [doorSessionId, setDoorSessionId] = useState<string | null>(null);
-
   const [scannerStarted, setScannerStarted] = useState(false);
   const [successState, setSuccessState] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
+  const [scannerPulse, setScannerPulse] = useState(false);
 
   const fetchUser = async () => {
     const token = localStorage.getItem("token");
@@ -78,146 +77,164 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   }, [router]);
 
   useEffect(() => {
-  const modeFromUrl = searchParams.get("mode");
+    const modeFromUrl = searchParams.get("mode");
 
-  if (modeFromUrl === "entry" || modeFromUrl === "exit") {
-    setMode(modeFromUrl);
-  }
-}, [searchParams]);
+    if (modeFromUrl === "entry" || modeFromUrl === "exit") {
+      setMode(modeFromUrl);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    let pulseInterval: NodeJS.Timeout | null = null;
+
+    if (scannerStarted) {
+      setScannerPulse(true);
+      pulseInterval = setInterval(() => {
+        setScannerPulse((prev) => !prev);
+      }, 900);
+    } else {
+      setScannerPulse(false);
+    }
+
+    return () => {
+      if (pulseInterval) clearInterval(pulseInterval);
+    };
+  }, [scannerStarted]);
 
   const stopScanner = async () => {
-  try {
-    if (scannerRef.current && scannerRunningRef.current) {
-      await scannerRef.current.stop();
-      await scannerRef.current.clear();
+    try {
+      if (scannerRef.current && scannerRunningRef.current) {
+        await scannerRef.current.stop();
+        await scannerRef.current.clear();
+      }
+    } catch (err) {
+      console.log("Scanner stop warning:", err);
+    } finally {
+      scannerRunningRef.current = false;
+      setScannerStarted(false);
     }
-  } catch (err) {
-    console.log("Scanner stop warning:", err);
-  } finally {
-    scannerRunningRef.current = false;
-    setScannerStarted(false);
-  }
-};
+  };
 
   const handleAccessAction = async (scannedValue: string) => {
-  const token = localStorage.getItem("token");
+    const token = localStorage.getItem("token");
 
-  if (!token) {
-    router.push("/login");
-    return;
-  }
+    if (!token) {
+      router.push("/login");
+      return;
+    }
 
-  try {
-    setMessage("");
-    setError("");
+    try {
+      setMessage("");
+      setError("");
 
-    const endpoint =
-      mode === "entry"
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`
-        : `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-out`;
+      const endpoint =
+        mode === "entry"
+          ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`
+          : `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-out`;
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        scannedQrValue: scannedValue,
-        accessPoint: "main-door",
-      }),
-    });
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          scannedQrValue: scannedValue,
+          accessPoint: "main-door",
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok) {
-      setError(data.message || `${mode === "entry" ? "Entry" : "Exit"} failed`);
+      if (!res.ok) {
+        setError(data.message || `${mode === "entry" ? "Entry" : "Exit"} failed`);
+
+        unlockTimeoutRef.current = setTimeout(() => {
+          scanLockRef.current = false;
+        }, 1800);
+
+        return;
+      }
+
+      setUser(data.user);
+      setMessage(
+        data.message ||
+          (mode === "entry" ? "Entry successful ✅" : "Exit successful ✅")
+      );
+
+      if (data.doorSessionId) {
+        setDoorSessionId(data.doorSessionId);
+        console.log("Door Session ID:", data.doorSessionId);
+      }
+
+      setSuccessState(true);
+      setRedirecting(true);
+
+      await fetchUser();
+
+      redirectTimeoutRef.current = setTimeout(() => {
+        router.push("/dashboard");
+      }, 1800);
+    } catch {
+      setError(`Something went wrong during ${mode}.`);
 
       unlockTimeoutRef.current = setTimeout(() => {
         scanLockRef.current = false;
       }, 1800);
-
-      return;
     }
-
-    setUser(data.user);
-    setMessage(
-      data.message ||
-        (mode === "entry" ? "Entry successful ✅" : "Exit successful ✅")
-    );
-
-    if (data.doorSessionId) {
-  setDoorSessionId(data.doorSessionId);
-  console.log("Door Session ID:", data.doorSessionId);
-}
-
-    setSuccessState(true);
-    setRedirecting(true);
-
-    await fetchUser();
-
-    redirectTimeoutRef.current = setTimeout(() => {
-      router.push("/dashboard");
-    }, 1800);
-  } catch {
-    setError(`Something went wrong during ${mode}.`);
-
-    unlockTimeoutRef.current = setTimeout(() => {
-      scanLockRef.current = false;
-    }, 1800);
-  }
-};
+  };
 
   const startScanner = async () => {
-  try {
-    setError("");
-    setMessage("");
-    setSuccessState(false);
-    setRedirecting(false);
+    try {
+      setError("");
+      setMessage("");
+      setSuccessState(false);
+      setRedirecting(false);
+      setDoorSessionId(null);
 
-    scanLockRef.current = false;
+      scanLockRef.current = false;
 
-    if (scannerRef.current) {
-      try {
-        await stopScanner();
-      } catch {}
+      if (scannerRef.current) {
+        try {
+          await stopScanner();
+        } catch {}
+      }
+
+      const scanner = new Html5Qrcode("reader");
+      scannerRef.current = scanner;
+
+      await scanner.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 260, height: 260 },
+        },
+        async (decodedText) => {
+          if (scanLockRef.current) return;
+
+          scanLockRef.current = true;
+
+          await stopScanner();
+          await handleAccessAction(decodedText);
+        },
+        () => {}
+      );
+
+      scannerRunningRef.current = true;
+      setScannerStarted(true);
+    } catch {
+      scanLockRef.current = false;
+      setError("Camera failed to start. Please allow camera access.");
     }
-
-    const scanner = new Html5Qrcode("reader");
-    scannerRef.current = scanner;
-
-    await scanner.start(
-      { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 260, height: 260 },
-      },
-      async (decodedText) => {
-        if (scanLockRef.current) return;
-
-        scanLockRef.current = true;
-
-        await stopScanner();
-        await handleAccessAction(decodedText);
-      },
-      () => {}
-    );
-
-    scannerRunningRef.current = true;
-    setScannerStarted(true);
-  } catch {
-    scanLockRef.current = false;
-    setError("Camera failed to start. Please allow camera access.");
-  }
-};
+  };
 
   useEffect(() => {
-  return () => {
-    if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
-    if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
-    stopScanner();
-  };
-}, []);
+    return () => {
+      if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
+      if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
+      stopScanner();
+    };
+  }, []);
 
   const handleSwitchMode = async (newMode: AccessMode) => {
     if (scannerStarted) {
@@ -229,15 +246,14 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     setMessage("");
     setSuccessState(false);
     setRedirecting(false);
+    setDoorSessionId(null);
   };
 
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <div className="rounded-2xl border border-white/10 bg-white/5 px-8 py-6 text-center shadow-2xl">
-          <p className="text-lg tracking-wide text-gray-300">
-            Loading scanner...
-          </p>
+          <p className="text-lg tracking-wide text-gray-300">Loading scanner...</p>
         </div>
       </main>
     );
@@ -318,9 +334,11 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
                 </div>
 
                 <div
-                  className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] ${
+                  className={`rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.24em] transition-all duration-500 ${
                     scannerStarted
-                      ? "border border-green-500/30 bg-green-500/10 text-green-400"
+                      ? scannerPulse
+                        ? "border border-green-400/40 bg-green-500/15 text-green-300 shadow-[0_0_30px_rgba(34,197,94,0.22)]"
+                        : "border border-green-500/25 bg-green-500/10 text-green-400"
                       : "border border-white/10 bg-white/5 text-gray-300"
                   }`}
                 >
@@ -331,7 +349,13 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
               <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-black/70 p-4">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,0,0,0.14),transparent_45%)]" />
 
-                <div className="relative mb-4 rounded-[24px] border border-red-500/20 bg-black p-3 shadow-[0_0_60px_rgba(255,0,0,0.08)]">
+                <div
+                  className={`relative mb-4 rounded-[24px] border bg-black p-3 transition-all duration-500 ${
+                    scannerStarted
+                      ? "border-red-500/30 shadow-[0_0_60px_rgba(255,0,0,0.16)]"
+                      : "border-white/10 shadow-[0_0_30px_rgba(255,255,255,0.03)]"
+                  }`}
+                >
                   <div
                     id="reader"
                     className="min-h-[320px] overflow-hidden rounded-[20px] border border-white/10 bg-black"
@@ -344,9 +368,7 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
                       onClick={startScanner}
                       className="w-full rounded-2xl bg-red-600 px-6 py-4 text-sm font-bold uppercase tracking-[0.2em] text-white shadow-[0_0_30px_rgba(255,0,0,0.4)] transition duration-300 hover:scale-[1.01] hover:bg-red-700"
                     >
-                      {mode === "entry"
-                        ? "Start Entry Scanner"
-                        : "Start Exit Scanner"}
+                      {mode === "entry" ? "Start Entry Scanner" : "Start Exit Scanner"}
                     </button>
                   ) : (
                     <button
@@ -355,14 +377,14 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
                     >
                       Stop Scanner
                     </button>
-                    
                   )}
                 </div>
+
                 {redirecting && (
-  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-green-300">
-    Scan locked. Processing successful access...
-  </p>
-)}
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-green-300">
+                    Scan locked. Processing successful access...
+                  </p>
+                )}
 
                 {(message || error) && (
                   <div
@@ -372,9 +394,7 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
                         : "border-green-500/30 bg-green-500/10 text-green-300"
                     }`}
                   >
-                    <p className="text-sm font-semibold tracking-wide">
-                      {error || message}
-                    </p>
+                    <p className="text-sm font-semibold tracking-wide">{error || message}</p>
                     {redirecting && !error && (
                       <p className="mt-2 text-xs uppercase tracking-[0.22em] text-green-200/80">
                         Redirecting to dashboard...
@@ -390,10 +410,8 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
                     </p>
 
                     {doorSessionId && (
-  <p className="mt-2 text-xs text-gray-400">
-    Session ID: {doorSessionId}
-  </p>
-)}
+                      <p className="mt-2 text-xs text-gray-400">Session ID: {doorSessionId}</p>
+                    )}
 
                     <p className="mt-2 text-sm text-green-200/90">
                       Camera closed automatically. Your access action is now recorded.
@@ -520,6 +538,7 @@ const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     </PageTransition>
   );
 }
+
 export default function CheckInPage() {
   return (
     <Suspense
