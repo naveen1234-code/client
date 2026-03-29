@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import SignatureCanvas from "react-signature-canvas";
 
@@ -39,12 +39,73 @@ export default function RegisterPage() {
     memberSignature: "",
   });
 
-  const [loading, setLoading] = useState(false);
+const [loading, setLoading] = useState(false);
 const [error, setError] = useState("");
 const [success, setSuccess] = useState("");
 const [showTermsPopup, setShowTermsPopup] = useState(false);
 const [termsAccepted, setTermsAccepted] = useState(false);
 const [showAccessAppPopup, setShowAccessAppPopup] = useState(false);
+const [turnstileToken, setTurnstileToken] = useState("");
+
+useEffect(() => {
+  const existingScript = document.getElementById("cf-turnstile-script");
+  if (existingScript) return;
+
+  const script = document.createElement("script");
+  script.id = "cf-turnstile-script";
+  script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+  script.async = true;
+  script.defer = true;
+  document.body.appendChild(script);
+}, []);
+
+useEffect(() => {
+  (window as typeof window & {
+    onTurnstileSuccess?: (token: string) => void;
+    onTurnstileExpired?: () => void;
+    onTurnstileError?: () => void;
+  }).onTurnstileSuccess = (token: string) => {
+    setTurnstileToken(token);
+    setError("");
+  };
+
+  (window as typeof window & {
+    onTurnstileSuccess?: (token: string) => void;
+    onTurnstileExpired?: () => void;
+    onTurnstileError?: () => void;
+  }).onTurnstileExpired = () => {
+    setTurnstileToken("");
+  };
+
+  (window as typeof window & {
+    onTurnstileSuccess?: (token: string) => void;
+    onTurnstileExpired?: () => void;
+    onTurnstileError?: () => void;
+  }).onTurnstileError = () => {
+    setTurnstileToken("");
+    setError("Bot protection failed. Please try again.");
+  };
+
+  return () => {
+    delete (window as typeof window & {
+      onTurnstileSuccess?: (token: string) => void;
+      onTurnstileExpired?: () => void;
+      onTurnstileError?: () => void;
+    }).onTurnstileSuccess;
+
+    delete (window as typeof window & {
+      onTurnstileSuccess?: (token: string) => void;
+      onTurnstileExpired?: () => void;
+      onTurnstileError?: () => void;
+    }).onTurnstileExpired;
+
+    delete (window as typeof window & {
+      onTurnstileSuccess?: (token: string) => void;
+      onTurnstileExpired?: () => void;
+      onTurnstileError?: () => void;
+    }).onTurnstileError;
+  };
+}, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -106,7 +167,10 @@ const [showAccessAppPopup, setShowAccessAppPopup] = useState(false);
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+  ...formData,
+  turnstileToken,
+}),
       });
 
       const data = await res.json();
@@ -132,15 +196,19 @@ setShowAccessAppPopup(true);
   };
 
   const handleConfirmTermsAndSubmit = async () => {
-    if (!termsAccepted) {
-      setError("You must agree to the Terms & Conditions before submitting.");
-      return;
-    }
+  if (!termsAccepted) {
+    setError("You must agree to the Terms & Conditions before submitting.");
+    return;
+  }
 
-    setShowTermsPopup(false);
-    await submitRegistration();
-  };
+  if (!turnstileToken) {
+    setError("Please complete the bot protection check before submitting.");
+    return;
+  }
 
+  setShowTermsPopup(false);
+  await submitRegistration();
+};
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-black">
       <div className="mx-auto max-w-5xl rounded-md bg-white p-4 shadow-lg sm:p-8">
@@ -583,6 +651,22 @@ setShowAccessAppPopup(true);
               </p>
             )}
           </section>
+
+          <div className="mt-8 border border-black p-4">
+  <h4 className="mb-3 text-center text-lg font-bold">Bot Protection</h4>
+
+  <div
+    className="cf-turnstile"
+    data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+    data-callback="onTurnstileSuccess"
+    data-expired-callback="onTurnstileExpired"
+    data-error-callback="onTurnstileError"
+  />
+
+  <p className="mt-3 text-center text-sm text-neutral-700">
+    Please complete the security check before submitting the form.
+  </p>
+</div>
 
           <button
             type="submit"
