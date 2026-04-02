@@ -114,6 +114,28 @@ type AccessStatsType = {
 
 const INITIAL_VISIBLE_COUNT = 5;
 
+const getPlanDays = (plan: string) => {
+  switch (plan) {
+    case "1 Month":
+      return 30;
+    case "3 Months":
+      return 90;
+    case "6 Months":
+      return 180;
+    case "1 Year":
+      return 365;
+    default:
+      return 0;
+  }
+};
+
+const calculateEndDate = (startDate: string, days: number) => {
+  if (!startDate || !days) return "";
+  const date = new Date(startDate);
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split("T")[0];
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const currentDate = new Date();
@@ -129,6 +151,7 @@ export default function AdminPage() {
   const [insideMembers, setInsideMembers] = useState<UserType[]>([]);
   const [accessStats, setAccessStats] = useState<AccessStatsType | null>(null);
   const [showAdminInstallPopup, setShowAdminInstallPopup] = useState(false);
+  const [showMembershipAdvanced, setShowMembershipAdvanced] = useState(false);
 
   const [statementMonth, setStatementMonth] = useState(currentDate.getMonth() + 1);
   const [statementYear, setStatementYear] = useState(currentDate.getFullYear());
@@ -294,6 +317,22 @@ export default function AdminPage() {
 
     fetchAdminData();
   }, [router]);
+
+  useEffect(() => {
+  const days = getPlanDays(membershipForm.membershipPlan);
+
+  if (!showMembershipAdvanced) {
+    setMembershipForm((prev) => ({
+      ...prev,
+      totalDays: String(days),
+      membershipEndDate: calculateEndDate(prev.membershipStartDate, days),
+    }));
+  }
+}, [
+  membershipForm.membershipPlan,
+  membershipForm.membershipStartDate,
+  showMembershipAdvanced,
+]);
 
   useEffect(() => {
   const alreadySeen = localStorage.getItem("gymRavanaAdminInstallPopupSeen");
@@ -2155,101 +2194,142 @@ const integrationStatusCards = useMemo(
                 </h2>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <input
-                    type="text"
-                    placeholder="User ID"
-                    value={membershipForm.userId}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        userId: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  />
+  <select
+    value={membershipForm.userId}
+    onChange={(e) =>
+      setMembershipForm({
+        ...membershipForm,
+        userId: e.target.value,
+      })
+    }
+    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500 md:col-span-2"
+  >
+    <option value="">Select Member</option>
+    {users.map((user) => (
+      <option key={user._id} value={user._id}>
+        {(user.fullName || user.name) + " — " + user.email}
+      </option>
+    ))}
+  </select>
 
-                  <select
-                    value={membershipForm.membershipStatus}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        membershipStatus: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  >
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                    <option value="expired">expired</option>
-                  </select>
+  <select
+    value={membershipForm.membershipStatus}
+    onChange={(e) =>
+      setMembershipForm({
+        ...membershipForm,
+        membershipStatus: e.target.value,
+      })
+    }
+    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+  >
+    <option value="active">active</option>
+    <option value="inactive">inactive</option>
+    <option value="expired">expired</option>
+  </select>
 
-                  <select
-                    value={membershipForm.membershipPlan}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        membershipPlan: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  >
-                    <option value="1 Month">1 Month</option>
-                    <option value="3 Months">3 Months</option>
-                    <option value="6 Months">6 Months</option>
-                    <option value="1 Year">1 Year</option>
-                    <option value="No Plan">No Plan</option>
-                  </select>
+  <select
+    value={membershipForm.membershipPlan}
+    onChange={(e) =>
+      setMembershipForm({
+        ...membershipForm,
+        membershipPlan: e.target.value,
+      })
+    }
+    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+  >
+    <option value="1 Month">1 Month</option>
+    <option value="3 Months">3 Months</option>
+    <option value="6 Months">6 Months</option>
+    <option value="1 Year">1 Year</option>
+    <option value="No Plan">No Plan</option>
+  </select>
 
-                  <input
-                    type="date"
-                    value={membershipForm.membershipStartDate}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        membershipStartDate: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  />
+<input
+  type="date"
+  value={membershipForm.membershipStartDate}
+  onChange={(e) =>
+    setMembershipForm({
+      ...membershipForm,
+      membershipStartDate: e.target.value,
+    })
+  }
+  onClick={(e) => {
+    const input = e.currentTarget as HTMLInputElement & {
+      showPicker?: () => void;
+    };
+    input.showPicker?.();
+  }}
+  onFocus={(e) => {
+    const input = e.currentTarget as HTMLInputElement & {
+      showPicker?: () => void;
+    };
+    input.showPicker?.();
+  }}
+  className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+ />
 
-                  <input
-                    type="date"
-                    value={membershipForm.membershipEndDate}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        membershipEndDate: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  />
+  <input
+    type="number"
+    placeholder="Remaining Days"
+    value={membershipForm.remainingDays}
+    onChange={(e) =>
+      setMembershipForm({
+        ...membershipForm,
+        remainingDays: e.target.value,
+      })
+    }
+    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+  />
 
-                  <input
-                    type="number"
-                    placeholder="Total Days"
-                    value={membershipForm.totalDays}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        totalDays: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  />
+  <button
+    type="button"
+    onClick={() => setShowMembershipAdvanced((prev) => !prev)}
+    className="md:col-span-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/30 hover:bg-red-500/10"
+  >
+    {showMembershipAdvanced ? "Hide Advanced Fields" : "Show Advanced Fields"}
+  </button>
 
-                  <input
-                    type="number"
-                    placeholder="Remaining Days"
-                    value={membershipForm.remainingDays}
-                    onChange={(e) =>
-                      setMembershipForm({
-                        ...membershipForm,
-                        remainingDays: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  />
-                </div>
+  {showMembershipAdvanced && (
+    <>
+      <input
+  type="date"
+  value={membershipForm.membershipEndDate}
+  onChange={(e) =>
+    setMembershipForm({
+      ...membershipForm,
+      membershipEndDate: e.target.value,
+    })
+  }
+  onClick={(e) => {
+    const input = e.currentTarget as HTMLInputElement & {
+      showPicker?: () => void;
+    };
+    input.showPicker?.();
+  }}
+  onFocus={(e) => {
+    const input = e.currentTarget as HTMLInputElement & {
+      showPicker?: () => void;
+    };
+    input.showPicker?.();
+  }}
+  className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+/>
+
+      <input
+        type="number"
+        placeholder="Total Days"
+        value={membershipForm.totalDays}
+        onChange={(e) =>
+          setMembershipForm({
+            ...membershipForm,
+            totalDays: e.target.value,
+          })
+        }
+        className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+      />
+    </>
+  )}
+</div>
 
                 <div className="mt-6 flex flex-col gap-4 xl:flex-row xl:items-stretch">
                   <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-gray-300 xl:min-w-[260px]">
@@ -2275,12 +2355,23 @@ const integrationStatusCards = useMemo(
                       </span>
                     </p>
                     <p className="mt-1">
-                      Total / Remaining:{" "}
-                      <span className="font-semibold text-green-400">
-                        {membershipForm.totalDays || "0"} /{" "}
-                        {membershipForm.remainingDays || "0"}
-                      </span>
-                    </p>
+  Total / Remaining:{" "}
+  <span className="font-semibold text-green-400">
+    {membershipForm.totalDays || "0"} / {membershipForm.remainingDays || "0"}
+  </span>
+</p>
+<p className="mt-1">
+  Start:{" "}
+  <span className="font-semibold text-white">
+    {membershipForm.membershipStartDate || "Not set"}
+  </span>
+</p>
+<p className="mt-1">
+  End:{" "}
+  <span className="font-semibold text-white">
+    {membershipForm.membershipEndDate || "Auto / Not set"}
+  </span>
+</p>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
