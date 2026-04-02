@@ -135,7 +135,7 @@ useEffect(() => {
 
     const signatureDataUrl = signatureRef.current
       .getTrimmedCanvas()
-      .toDataURL("image/jpeg");
+      .toDataURL("image/png");
 
     setFormData((prev) => ({
       ...prev,
@@ -621,6 +621,7 @@ setShowAccessAppPopup(true);
               <SignatureCanvas
                 ref={signatureRef}
                 penColor="black"
+                backgroundColor="white"
                 canvasProps={{
                   className: "h-40 w-full",
                 }}
