@@ -40,6 +40,8 @@ export default function CheckInPage() {
   const [successState, setSuccessState] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [scannerPulse, setScannerPulse] = useState(false);
+  const [showInstallHelp, setShowInstallHelp] = useState(false);
+const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const fetchUser = async () => {
     const token = localStorage.getItem("token");
@@ -75,6 +77,19 @@ export default function CheckInPage() {
   useEffect(() => {
     fetchUser();
   }, [router]);
+
+  useEffect(() => {
+  const handler = (e: Event) => {
+    e.preventDefault();
+    setDeferredPrompt(e);
+  };
+
+  window.addEventListener("beforeinstallprompt", handler as EventListener);
+
+  return () => {
+    window.removeEventListener("beforeinstallprompt", handler as EventListener);
+  };
+}, []);
 
   useEffect(() => {
   if (typeof window === "undefined") return;
@@ -239,6 +254,16 @@ export default function CheckInPage() {
     };
   }, []);
 
+  const handleInstallAccessApp = async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt();
+    setDeferredPrompt(null);
+    return;
+  }
+
+  setShowInstallHelp(true);
+};
+
   const handleSwitchMode = async (newMode: AccessMode) => {
     if (scannerStarted) {
       await stopScanner();
@@ -296,6 +321,14 @@ export default function CheckInPage() {
             >
               Back to Dashboard
             </button>
+
+            <button
+  onClick={handleInstallAccessApp}
+  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/40 hover:bg-red-500/10"
+>
+  Install Access App
+</button>
+
           </div>
 
           <div className="mb-8 flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur sm:flex-row">
@@ -523,6 +556,40 @@ export default function CheckInPage() {
                   <p className="text-sm text-gray-400">No member data found.</p>
                 )}
               </div>
+
+              {showInstallHelp && (
+  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 px-4">
+    <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-[#0b0b0b] p-6 shadow-2xl">
+      <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-red-400">
+        Access App
+      </p>
+
+      <h3 className="mt-3 text-2xl font-black uppercase tracking-tight text-white">
+        Install on Your Phone
+      </h3>
+
+      <p className="mt-4 text-sm leading-7 text-gray-300">
+        For iPhone, open this page in Safari, tap Share, then choose “Add to Home Screen”.
+      </p>
+
+      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-gray-300">
+        <p>1. Open this page in Safari</p>
+        <p>2. Tap the Share button</p>
+        <p>3. Tap “Add to Home Screen”</p>
+      </div>
+
+      <div className="mt-6 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowInstallHelp(false)}
+          className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
+        >
+          Got It
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
               <div className="rounded-[30px] border border-red-500/20 bg-gradient-to-br from-red-500/10 to-transparent p-6 shadow-2xl">
                 <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-red-400">

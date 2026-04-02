@@ -128,6 +128,7 @@ export default function AdminPage() {
   const [accessLogs, setAccessLogs] = useState<AccessLogType[]>([]);
   const [insideMembers, setInsideMembers] = useState<UserType[]>([]);
   const [accessStats, setAccessStats] = useState<AccessStatsType | null>(null);
+  const [showAdminInstallPopup, setShowAdminInstallPopup] = useState(false);
 
   const [statementMonth, setStatementMonth] = useState(currentDate.getMonth() + 1);
   const [statementYear, setStatementYear] = useState(currentDate.getFullYear());
@@ -295,6 +296,14 @@ export default function AdminPage() {
   }, [router]);
 
   useEffect(() => {
+  const alreadySeen = localStorage.getItem("gymRavanaAdminInstallPopupSeen");
+
+  if (!alreadySeen) {
+    setShowAdminInstallPopup(true);
+  }
+}, []);
+
+  useEffect(() => {
     if (!isAdminVerified) return;
 
     const interval = window.setInterval(() => {
@@ -442,6 +451,12 @@ export default function AdminPage() {
       setError("Something went wrong while downloading PDF");
     }
   };
+
+  const handleCloseAdminInstallPopup = () => {
+  localStorage.setItem("gymRavanaAdminInstallPopupSeen", "true");
+  setShowAdminInstallPopup(false);
+};
+
   const handleForceExit = async (userId: string, userName: string) => {
     const token = localStorage.getItem("token");
     if (!token) return;
@@ -3262,6 +3277,53 @@ const integrationStatusCards = useMemo(
           </>
         ) : null}
         </div>
+
+        {showAdminInstallPopup && (
+  <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 px-4">
+    <div className="w-full max-w-lg rounded-[28px] border border-white/10 bg-[#0b0b0b] p-6 shadow-2xl">
+      <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-red-400">
+        Admin Access
+      </p>
+
+      <h3 className="mt-3 text-2xl font-black uppercase tracking-tight text-white">
+        Install Admin Access
+      </h3>
+
+      <p className="mt-4 text-sm leading-7 text-gray-300">
+        Add this admin dashboard to your phone home screen for faster daily access.
+      </p>
+
+      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-gray-300">
+        <p className="font-bold text-white">For iPhone / Safari:</p>
+        <p className="mt-2">1. Open this page in Safari</p>
+        <p>2. Tap the Share button</p>
+        <p>3. Tap “Add to Home Screen”</p>
+      </div>
+
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={handleCloseAdminInstallPopup}
+          className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+        >
+          Maybe Later
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            navigator.clipboard?.writeText(window.location.href);
+            handleCloseAdminInstallPopup();
+          }}
+          className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
+        >
+          Copy Admin Link
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       </main>
     </PageTransition>
   );

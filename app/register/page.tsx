@@ -107,6 +107,27 @@ useEffect(() => {
   };
 }, []);
 
+useEffect(() => {
+  const savedForm = sessionStorage.getItem("gymRavanaRegisterForm");
+  const savedTermsAccepted = sessionStorage.getItem("gymRavanaTermsAccepted");
+
+  if (savedForm) {
+    setFormData(JSON.parse(savedForm));
+  }
+
+  if (savedTermsAccepted === "true") {
+    setTermsAccepted(true);
+  }
+}, []);
+
+useEffect(() => {
+  sessionStorage.setItem("gymRavanaRegisterForm", JSON.stringify(formData));
+}, [formData]);
+
+useEffect(() => {
+  sessionStorage.setItem("gymRavanaTermsAccepted", String(termsAccepted));
+}, [termsAccepted]);
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
@@ -181,6 +202,8 @@ useEffect(() => {
       }
 
       setSuccess("Member registered successfully");
+      sessionStorage.removeItem("gymRavanaRegisterForm");
+sessionStorage.removeItem("gymRavanaTermsAccepted");
 setShowAccessAppPopup(true);
     } catch {
       setError("Something went wrong");
@@ -189,12 +212,10 @@ setShowAccessAppPopup(true);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setShowTermsPopup(true);
-  };
-
+  const handleSubmit = () => {
+  setError("");
+  setShowTermsPopup(true);
+};
   const handleConfirmTermsAndSubmit = async () => {
   if (!termsAccepted) {
     setError("You must agree to the Terms & Conditions before submitting.");
@@ -212,7 +233,7 @@ setShowAccessAppPopup(true);
   return (
     <main className="min-h-screen bg-neutral-100 px-4 py-8 text-black">
       <div className="mx-auto max-w-5xl rounded-md bg-white p-4 shadow-lg sm:p-8">
-        <form onSubmit={handleSubmit} className="border border-black p-4">
+        <form className="border border-black p-4">
           <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
             <div className="text-center">
               <h1 className="text-4xl font-black tracking-[0.2em]">GYM</h1>
@@ -670,12 +691,13 @@ setShowAccessAppPopup(true);
 </div>
 
           <button
-            type="submit"
-            disabled={loading}
-            className="mt-8 w-full border border-black bg-black py-4 text-lg font-bold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            {loading ? "Submitting..." : "Submit Membership Form"}
-          </button>
+  type="button"
+  onClick={handleSubmit}
+  disabled={loading}
+  className="mt-8 w-full border border-black bg-black py-4 text-lg font-bold text-white transition hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-70"
+>
+  {loading ? "Submitting..." : "Submit Membership Form"}
+</button>
         </form>
       </div>
 
@@ -690,23 +712,24 @@ setShowAccessAppPopup(true);
               Please review the Gym Ravana Terms & Conditions before final submission.
             </p>
 
-            <div className="mt-5 overflow-hidden border border-black">
-              <img
-                src="/images/gym-ravana-terms.jpeg"
-                alt="Gym Ravana Terms and Conditions"
-                className="w-full object-contain"
-              />
-            </div>
+            <div className="mt-5 rounded-xl border border-black bg-neutral-50 p-4 text-center">
+  <p className="text-base font-bold text-black">
+    By continuing, you confirm that you have read, understood, and agreed to the
+    Gym Ravana Terms & Conditions.
+  </p>
+  <p className="mt-3 text-sm leading-6 text-neutral-700">
+    Please open the full terms page if you want to review every rule before final submission.
+  </p>
+</div>
 
             <div className="mt-5 flex flex-col gap-4">
-              <a
-                href="/terms"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center border border-black px-4 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
-              >
-                Open Full Terms Page
-              </a>
+              <button
+  type="button"
+  onClick={() => window.open("/terms", "_blank", "noopener,noreferrer")}
+  className="inline-flex items-center justify-center border border-black px-4 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:bg-black hover:text-white"
+>
+  Open Full Terms Page
+</button>
 
               <label className="flex items-start gap-3 text-sm font-semibold leading-6 text-black">
                 <input

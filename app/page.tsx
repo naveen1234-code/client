@@ -372,6 +372,15 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
       >
         Why Ravana
       </a>
+
+            <a
+        href="#gallery-preview"
+        onClick={() => setMobileMenuOpen(false)}
+        className="border-b border-white/10 py-4 text-sm font-semibold uppercase tracking-[0.18em] text-white transition hover:text-red-500"
+      >
+        Gallery
+      </a>
+
       <a
         href="#plans"
         onClick={() => setMobileMenuOpen(false)}
