@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import HomeGalleryPreview from "@/components/HomeGalleryPreview";
 
 export default function Home() {
   const router = useRouter();
@@ -1040,6 +1041,8 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
             </div>
           </div>
         </section>
+
+        <HomeGalleryPreview />
 
         {/* SCHEDULE */}
         <section id="schedule" className="section-wide scroll-mt-[100px] bg-black px-4 sm:px-6 md:px-10">

@@ -1402,6 +1402,13 @@ const integrationStatusCards = useMemo(
         </button>
 
         <button
+  onClick={() => router.push("/admin/gallery")}
+  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:border-orange-500/40 hover:bg-orange-500/10"
+>
+  Gallery Manager
+</button>
+
+        <button
           onClick={handleLogout}
           className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:scale-[1.01] hover:bg-red-700"
         >
