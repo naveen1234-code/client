@@ -17,11 +17,10 @@ const oswald = Oswald({
 export const metadata: Metadata = {
   title: "GYM RAVANA",
   description: "Strength • Discipline • Power",
-  manifest: "/manifest.json",
   themeColor: "#dc2626",
   icons: {
     icon: "/icon-192.png",
-    apple: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
   },
 };
 

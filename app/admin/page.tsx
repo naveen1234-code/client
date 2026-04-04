@@ -3377,38 +3377,36 @@ const integrationStatusCards = useMemo(
       </p>
 
       <h3 className="mt-3 text-2xl font-black uppercase tracking-tight text-white">
-        Install Admin Access
+        Install Admin App
       </h3>
 
       <p className="mt-4 text-sm leading-7 text-gray-300">
-        Add this admin dashboard to your phone home screen for faster daily access.
+        Install the Gym Ravana admin app on your phone for faster staff access.
       </p>
 
-      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-gray-300">
-        <p className="font-bold text-white">For iPhone / Safari:</p>
-        <p className="mt-2">1. Open this page in Safari</p>
-        <p>2. Tap the Share button</p>
-        <p>3. Tap “Add to Home Screen”</p>
+      <div className="mt-5 space-y-4">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-gray-300">
+          <p className="font-bold text-white">For iPhone / Safari:</p>
+          <p className="mt-2">1. Open this page in Safari</p>
+          <p>2. Tap the Share button</p>
+          <p>3. Tap Add to Home Screen</p>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm text-gray-300">
+          <p className="font-bold text-white">For Android:</p>
+          <p className="mt-2">1. Open the browser menu</p>
+          <p>2. Tap Install app or Add to Home screen</p>
+          <p>3. Confirm to install the admin app</p>
+        </div>
       </div>
 
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+      <div className="mt-6 flex justify-end">
         <button
           type="button"
           onClick={handleCloseAdminInstallPopup}
-          className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
-        >
-          Maybe Later
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            navigator.clipboard?.writeText(window.location.href);
-            handleCloseAdminInstallPopup();
-          }}
           className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
         >
-          Copy Admin Link
+          Got It
         </button>
       </div>
     </div>
