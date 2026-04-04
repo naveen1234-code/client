@@ -25,8 +25,12 @@ export default function AccessPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserType | null>(null);
   const [error, setError] = useState("");
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installPrompt, setInstallPrompt] =
+    useState<BeforeInstallPromptEvent | null>(null);
+
   const [showInstallHelp, setShowInstallHelp] = useState(false);
+  const [installHelpTitle, setInstallHelpTitle] = useState("");
+  const [installHelpSteps, setInstallHelpSteps] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -76,20 +80,87 @@ export default function AccessPage() {
     };
   }, []);
 
+  const detectInstallGuide = () => {
+    const ua = navigator.userAgent.toLowerCase();
+
+    const isIOS =
+      /iphone|ipad|ipod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    const isSafari =
+      /safari/.test(ua) &&
+      !/chrome|crios|android|edg|opr|opera/.test(ua);
+
+    const isAndroid = /android/.test(ua);
+    const isChrome = /chrome|crios/.test(ua) && !/edg|opr|opera/.test(ua);
+    const isSamsung = /samsungbrowser/.test(ua);
+
+    if (isIOS && isSafari) {
+      return {
+        title: "Install on iPhone / Safari",
+        steps: [
+          "Tap the Share button in Safari.",
+          "Scroll down and tap Add to Home Screen.",
+          "Tap Add to install the Gym Ravana Access App.",
+        ],
+      };
+    }
+
+{showInstallHelp && (
+  <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-200">
+    <p className="font-semibold text-white">Install not showing automatically?</p>
+    <p className="mt-2 leading-7">
+      On Android: open browser menu <span className="font-bold text-white">⋮</span> and tap{" "}
+      <span className="font-bold text-white">Install App</span> or{" "}
+      <span className="font-bold text-white">Add to Home Screen</span>.
+    </p>
+    <p className="mt-2 leading-7">
+      On iPhone Safari: tap <span className="font-bold text-white">Share</span> and choose{" "}
+      <span className="font-bold text-white">Add to Home Screen</span>.
+    </p>
+  </div>
+)}
+
+    if (isAndroid && isSamsung) {
+      return {
+        title: "Install on Samsung Internet",
+        steps: [
+          "Tap the browser menu.",
+          "Tap Add page to.",
+          "Choose Home screen.",
+          "Tap Add to install the Gym Ravana Access App.",
+        ],
+      };
+    }
+
+    return {
+      title: "Install Access App",
+      steps: [
+        "Open your browser menu.",
+        "Choose Install App or Add to Home Screen.",
+        "Confirm to place Gym Ravana Access App on your phone.",
+      ],
+    };
+  };
+
   const handleInstallApp = async () => {
-    if (!installPrompt) {
-      setShowInstallHelp(true);
+    if (installPrompt) {
+      setShowInstallHelp(false);
+      await installPrompt.prompt();
+
+      const choiceResult = await installPrompt.userChoice;
+
+      if (choiceResult.outcome === "accepted") {
+        setInstallPrompt(null);
+      }
+
       return;
     }
 
-    setShowInstallHelp(false);
-    await installPrompt.prompt();
-
-    const choiceResult = await installPrompt.userChoice;
-
-    if (choiceResult.outcome === "accepted") {
-      setInstallPrompt(null);
-    }
+    const guide = detectInstallGuide();
+    setInstallHelpTitle(guide.title);
+    setInstallHelpSteps(guide.steps);
+    setShowInstallHelp(true);
   };
 
   const handleLogout = () => {
@@ -129,7 +200,8 @@ export default function AccessPage() {
               </h1>
 
               <p className="mt-3 text-sm text-gray-400 sm:text-base">
-                Fast gym entry and exit from your phone. Use this screen daily, and open the full account page only when you need more details.
+                Fast gym entry and exit from your phone. Use this screen daily,
+                and open the full account page only when you need more details.
               </p>
             </div>
 
@@ -147,7 +219,9 @@ export default function AccessPage() {
                       Member
                     </p>
                     <p className="mt-2 text-xl font-black text-white">{user.name}</p>
-                    <p className="mt-1 break-all text-sm text-gray-400">{user.email}</p>
+                    <p className="mt-1 break-all text-sm text-gray-400">
+                      {user.email}
+                    </p>
                   </div>
 
                   <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
@@ -218,26 +292,52 @@ export default function AccessPage() {
                   </button>
                 </div>
 
-                {showInstallHelp && (
-                  <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-200">
-                    If the install popup does not appear, open your browser menu and choose{" "}
-                    <span className="font-bold text-white">Add to Home Screen</span> or{" "}
-                    <span className="font-bold text-white">Install App</span>.
-                  </div>
-                )}
-
                 <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
                   <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
                     Easy Daily Use
                   </p>
                   <p className="mt-2 text-sm leading-7 text-gray-300">
-                    For the easiest experience, install this access app once and open it from your phone home screen every time you come to the gym.
+                    For the easiest experience, install this access app once and
+                    open it from your phone home screen every time you come to the gym.
                   </p>
                 </div>
               </>
             )}
           </div>
         </div>
+
+        {showInstallHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#111111] p-6 shadow-2xl">
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white">
+                {installHelpTitle}
+              </h2>
+
+              <p className="mt-3 text-sm leading-7 text-gray-300">
+                Follow these quick steps to install the Gym Ravana Access App on your phone.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {installHelpSteps.map((step, index) => (
+                  <div
+                    key={index}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200"
+                  >
+                    <span className="mr-2 font-black text-red-400">{index + 1}.</span>
+                    {step}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowInstallHelp(false)}
+                className="mt-6 w-full rounded-2xl bg-red-600 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        )}
       </main>
     </PageTransition>
   );

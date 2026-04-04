@@ -1,10 +1,11 @@
 {
-  "name": "Gym Ravana",
-  "short_name": "Ravana",
-  "description": "Gym Ravana member access and admin control system.",
-  "start_url": "/install",
+  "name": "Gym Ravana Access App",
+  "short_name": "Ravana Access",
+  "description": "Gym Ravana member access app for quick entry and exit.",
+  "start_url": "/access",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "window-controls-overlay"],
   "background_color": "#000000",
   "theme_color": "#dc2626",
   "orientation": "portrait",
@@ -12,12 +13,14 @@
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/apple-touch-icon.png",
