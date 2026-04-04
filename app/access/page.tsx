@@ -1,279 +1,344 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import PageTransition from "@/components/PageTransition";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+type UserType = {
+  name: string;
+  email: string;
+  role: string;
+  membershipStatus: string;
+  membershipPlan: string;
+  remainingDays: number;
+  attendanceCount: number;
+};
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
-type InstallGuide = {
-  title: string;
-  steps: string[];
-};
-
 export default function AccessPage() {
   const router = useRouter();
 
-  const [deferredPrompt, setDeferredPrompt] =
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<UserType | null>(null);
+  const [error, setError] = useState("");
+  const [installPrompt, setInstallPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
+
   const [showInstallHelp, setShowInstallHelp] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  const ENTRY_SCAN_ROUTE = "/access/entry";
-  const EXIT_SCAN_ROUTE = "/access/exit";
-  const FULL_ACCOUNT_ROUTE = "/member";
-  const LOGOUT_ROUTE = "/login";
-
-  const checkStandalone = useCallback(() => {
-    if (typeof window === "undefined") return false;
-
-    const iosStandalone =
-      "standalone" in window.navigator &&
-      (window.navigator as Navigator & { standalone?: boolean }).standalone ===
-        true;
-
-    const mediaStandalone = window.matchMedia(
-      "(display-mode: standalone)"
-    ).matches;
-
-    return iosStandalone || mediaStandalone;
-  }, []);
+  const [installHelpTitle, setInstallHelpTitle] = useState("");
+  const [installHelpSteps, setInstallHelpSteps] = useState<string[]>([]);
 
   useEffect(() => {
-    setIsStandalone(checkStandalone());
+    const fetchUser = async () => {
+      const token = localStorage.getItem("token");
 
-    const handleBeforeInstallPrompt = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          localStorage.removeItem("token");
+          router.push("/login");
+          return;
+        }
+
+        setUser(data);
+      } catch {
+        setError("Failed to load access app");
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const handleAppInstalled = () => {
-      setDeferredPrompt(null);
-      setShowInstallHelp(false);
-      setIsStandalone(true);
+    fetchUser();
+  }, [router]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as BeforeInstallPromptEvent);
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
-      window.removeEventListener(
-        "beforeinstallprompt",
-        handleBeforeInstallPrompt
-      );
-      window.removeEventListener("appinstalled", handleAppInstalled);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
     };
-  }, [checkStandalone]);
+  }, []);
 
-  const detectInstallGuide = useCallback((): InstallGuide => {
-    if (typeof window === "undefined") {
-      return {
-        title: "Install this app",
-        steps: [
-          "Open this page in your mobile browser.",
-          "Use the browser menu and choose the install option.",
-        ],
-      };
-    }
+  const detectInstallGuide = () => {
+    const ua = navigator.userAgent.toLowerCase();
 
-    const ua = window.navigator.userAgent.toLowerCase();
-    const isIPhone =
-      /iphone|ipad|ipod/.test(ua) &&
+    const isIOS =
+      /iphone|ipad|ipod/.test(ua) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+    const isSafari =
       /safari/.test(ua) &&
-      !/crios|fxios|edgios/.test(ua);
+      !/chrome|crios|android|edg|opr|opera/.test(ua);
 
-    const isSamsungInternet =
-      /samsungbrowser/.test(ua) && /android/.test(ua);
+    const isAndroid = /android/.test(ua);
+    const isChrome = /chrome|crios/.test(ua) && !/edg|opr|opera/.test(ua);
+    const isSamsung = /samsungbrowser/.test(ua);
 
-    const isAndroidChrome =
-      /android/.test(ua) &&
-      /chrome/.test(ua) &&
-      !/edg|opr|opera|samsungbrowser/.test(ua);
-
-    if (isIPhone) {
+    if (isIOS && isSafari) {
       return {
-        title: "Install on iPhone Safari",
+        title: "Install on iPhone / Safari",
         steps: [
-          "Tap the Share icon at the bottom of Safari.",
+          "Tap the Share button in Safari.",
           "Scroll down and tap Add to Home Screen.",
-          "Tap Add in the top-right corner.",
+          "Tap Add to install the Gym Ravana Access App.",
         ],
       };
     }
 
-    if (isSamsungInternet) {
+{showInstallHelp && (
+  <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-200">
+    <p className="font-semibold text-white">Install not showing automatically?</p>
+    <p className="mt-2 leading-7">
+      On Android: open browser menu <span className="font-bold text-white">⋮</span> and tap{" "}
+      <span className="font-bold text-white">Install App</span> or{" "}
+      <span className="font-bold text-white">Add to Home Screen</span>.
+    </p>
+    <p className="mt-2 leading-7">
+      On iPhone Safari: tap <span className="font-bold text-white">Share</span> and choose{" "}
+      <span className="font-bold text-white">Add to Home Screen</span>.
+    </p>
+  </div>
+)}
+
+    if (isAndroid && isSamsung) {
       return {
         title: "Install on Samsung Internet",
         steps: [
-          "Tap the menu button in Samsung Internet.",
+          "Tap the browser menu.",
           "Tap Add page to.",
           "Choose Home screen.",
-        ],
-      };
-    }
-
-    if (isAndroidChrome) {
-      return {
-        title: "Install on Android Chrome",
-        steps: [
-          "Tap the browser menu in the top-right corner.",
-          "Tap Install app or Add to Home screen.",
-          "Confirm the install when prompted.",
+          "Tap Add to install the Gym Ravana Access App.",
         ],
       };
     }
 
     return {
-      title: "Install this app",
+      title: "Install Access App",
       steps: [
         "Open your browser menu.",
-        "Look for Install app or Add to Home screen.",
-        "Confirm the install to place it on your phone.",
+        "Choose Install App or Add to Home Screen.",
+        "Confirm to place Gym Ravana Access App on your phone.",
       ],
     };
-  }, []);
+  };
 
-  const installGuide = useMemo(() => detectInstallGuide(), [detectInstallGuide]);
+  const handleInstallApp = async () => {
+    if (installPrompt) {
+      setShowInstallHelp(false);
+      await installPrompt.prompt();
 
-  const handleInstallClick = async () => {
-    if (isStandalone) return;
+      const choiceResult = await installPrompt.userChoice;
 
-    if (deferredPrompt) {
-      try {
-        await deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        setDeferredPrompt(null);
-      } catch {
-        setShowInstallHelp(true);
+      if (choiceResult.outcome === "accepted") {
+        setInstallPrompt(null);
       }
+
       return;
     }
 
+    const guide = detectInstallGuide();
+    setInstallHelpTitle(guide.title);
+    setInstallHelpSteps(guide.steps);
     setShowInstallHelp(true);
   };
 
   const handleLogout = () => {
-    try {
-      localStorage.removeItem("token");
-      localStorage.removeItem("member");
-      localStorage.removeItem("user");
-      localStorage.removeItem("auth");
-      sessionStorage.clear();
-    } catch {}
-
-    router.push(LOGOUT_ROUTE);
+    localStorage.removeItem("token");
+    router.push("/login");
   };
 
-  const ActionButton = ({
-    label,
-    onClick,
-    variant = "default",
-  }: {
-    label: string;
-    onClick: () => void;
-    variant?: "default" | "primary" | "danger";
-  }) => {
-    const styles =
-      variant === "primary"
-        ? "bg-yellow-500 hover:bg-yellow-400 text-black"
-        : variant === "danger"
-        ? "bg-red-600 hover:bg-red-500 text-white"
-        : "bg-white/10 hover:bg-white/15 text-white border border-white/10";
-
+  if (loading) {
     return (
-      <button
-        onClick={onClick}
-        className={`w-full rounded-2xl px-5 py-4 text-left text-base font-semibold transition duration-200 ${styles}`}
-      >
-        {label}
-      </button>
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-8 py-6 text-center shadow-2xl">
+          Loading access app...
+        </div>
+      </main>
     );
-  };
+  }
 
   return (
-    <main className="min-h-screen bg-black text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-md items-center justify-center px-4 py-8">
-        <div className="w-full rounded-3xl border border-white/10 bg-zinc-950/90 p-5 shadow-2xl backdrop-blur">
-          <div className="mb-6">
-            <p className="text-xs uppercase tracking-[0.25em] text-yellow-500">
-              Gym Ravana
-            </p>
-            <h1 className="mt-2 text-3xl font-bold">Member Access</h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Quick access for scans, app install, account view, and logout.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <ActionButton
-              label="Entry Scan"
-              variant="primary"
-              onClick={() => router.push(ENTRY_SCAN_ROUTE)}
-            />
-
-            <ActionButton
-              label="Exit Scan"
-              onClick={() => router.push(EXIT_SCAN_ROUTE)}
-            />
-
-            <ActionButton
-              label={isStandalone ? "App Installed" : "Install App"}
-              onClick={handleInstallClick}
-            />
-
-            <ActionButton
-              label="View Full Account"
-              onClick={() => router.push(FULL_ACCOUNT_ROUTE)}
-            />
-
-            <ActionButton
-              label="Logout"
-              variant="danger"
-              onClick={handleLogout}
-            />
-          </div>
-
-          {!isStandalone && (
-            <p className="mt-4 text-center text-xs text-zinc-500">
-              Install this member app for faster access from your home screen.
-            </p>
-          )}
+    <PageTransition>
+      <main className="relative min-h-screen overflow-hidden bg-black px-4 py-8 text-white sm:px-6">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute left-[-120px] top-[100px] h-[260px] w-[260px] rounded-full bg-red-600/20 blur-3xl" />
+          <div className="absolute right-[-80px] top-[140px] h-[220px] w-[220px] rounded-full bg-red-500/10 blur-3xl" />
+          <div className="absolute bottom-[-100px] left-1/2 h-[260px] w-[260px] -translate-x-1/2 rounded-full bg-red-700/10 blur-3xl" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,0,0,0.12),transparent_35%)]" />
         </div>
-      </div>
 
-      {showInstallHelp && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
-          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-zinc-950 p-5 shadow-2xl">
-            <h2 className="text-xl font-bold">{installGuide.title}</h2>
-            <p className="mt-2 text-sm text-zinc-400">
-              Since the direct install prompt is not available right now, follow
-              these steps:
-            </p>
+        <div className="relative mx-auto max-w-2xl">
+          <div className="rounded-[30px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur sm:p-8">
+            <div className="text-center">
+              <p className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/10 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-red-400">
+                Gym Ravana Access App
+              </p>
 
-            <div className="mt-4 rounded-2xl bg-white/5 p-4">
-              <ol className="space-y-3 text-sm text-zinc-200">
-                {installGuide.steps.map((step, index) => (
-                  <li key={index} className="flex gap-3">
-                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-yellow-500 text-xs font-bold text-black">
-                      {index + 1}
-                    </span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
+              <h1 className="mt-4 text-3xl font-black uppercase tracking-tight text-white sm:text-5xl">
+                Quick Member Access
+              </h1>
+
+              <p className="mt-3 text-sm text-gray-400 sm:text-base">
+                Fast gym entry and exit from your phone. Use this screen daily,
+                and open the full account page only when you need more details.
+              </p>
             </div>
 
-            <button
-              onClick={() => setShowInstallHelp(false)}
-              className="mt-5 w-full rounded-2xl bg-yellow-500 px-4 py-3 font-semibold text-black transition hover:bg-yellow-400"
-            >
-              Got It
-            </button>
+            {error && (
+              <div className="mt-6 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-4 text-sm font-semibold text-red-300">
+                {error}
+              </div>
+            )}
+
+            {user && (
+              <>
+                <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                      Member
+                    </p>
+                    <p className="mt-2 text-xl font-black text-white">{user.name}</p>
+                    <p className="mt-1 break-all text-sm text-gray-400">
+                      {user.email}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                      Membership Status
+                    </p>
+                    <p className="mt-2 text-xl font-black text-yellow-400">
+                      {user.membershipStatus}
+                    </p>
+                    <p className="mt-1 text-sm text-gray-400">{user.membershipPlan}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-green-500/20 bg-green-500/10 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-green-300">
+                      Remaining Days
+                    </p>
+                    <p className="mt-2 text-4xl font-black text-green-400">
+                      {user.remainingDays}
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-blue-300">
+                      Attendance Count
+                    </p>
+                    <p className="mt-2 text-4xl font-black text-blue-400">
+                      {user.attendanceCount}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4">
+                  <button
+                    onClick={() => router.push("/check-in?mode=entry")}
+                    className="w-full rounded-2xl bg-red-600 px-6 py-5 text-base font-black uppercase tracking-[0.18em] text-white shadow-[0_0_30px_rgba(255,0,0,0.25)] transition duration-300 hover:scale-[1.01] hover:bg-red-700"
+                  >
+                    Entry Scan
+                  </button>
+
+                  <button
+                    onClick={() => router.push("/check-in?mode=exit")}
+                    className="w-full rounded-2xl border border-white/10 bg-white/5 px-6 py-5 text-base font-black uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/30 hover:bg-red-500/10"
+                  >
+                    Exit Scan
+                  </button>
+                </div>
+
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <button
+                    onClick={handleInstallApp}
+                    className="rounded-2xl bg-red-600 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
+                  >
+                    Install App
+                  </button>
+
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+                  >
+                    View Full Account
+                  </button>
+
+                  <button
+                    onClick={handleLogout}
+                    className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+                  >
+                    Logout
+                  </button>
+                </div>
+
+                <div className="mt-6 rounded-2xl border border-white/10 bg-black/30 p-4">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-gray-400">
+                    Easy Daily Use
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-gray-300">
+                    For the easiest experience, install this access app once and
+                    open it from your phone home screen every time you come to the gym.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         </div>
-      )}
-    </main>
+
+        {showInstallHelp && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+            <div className="w-full max-w-md rounded-[28px] border border-white/10 bg-[#111111] p-6 shadow-2xl">
+              <h2 className="text-2xl font-black uppercase tracking-tight text-white">
+                {installHelpTitle}
+              </h2>
+
+              <p className="mt-3 text-sm leading-7 text-gray-300">
+                Follow these quick steps to install the Gym Ravana Access App on your phone.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {installHelpSteps.map((step, index) => (
+                  <div
+                    key={index}
+                    className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200"
+                  >
+                    <span className="mr-2 font-black text-red-400">{index + 1}.</span>
+                    {step}
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setShowInstallHelp(false)}
+                className="mt-6 w-full rounded-2xl bg-red-600 px-5 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition hover:bg-red-700"
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </PageTransition>
   );
 }
