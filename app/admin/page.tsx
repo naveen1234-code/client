@@ -536,58 +536,118 @@ export default function AdminPage() {
   };
 
   const handleMembershipUpdate = async () => {
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    if (!token) {
-      setError("No token found");
+  if (!token) {
+    setError("No token found");
+    return;
+  }
+
+  if (
+    !membershipForm.userId ||
+    !membershipForm.membershipStatus ||
+    !membershipForm.membershipPlan
+  ) {
+    setError("Please fill user ID, status, and plan");
+    return;
+  }
+
+  const selectedUser = users.find((user) => user._id === membershipForm.userId);
+
+  if (!selectedUser) {
+    setError("Selected user not found");
+    return;
+  }
+
+  const parsedTotalDays =
+    membershipForm.totalDays.trim() === ""
+      ? selectedUser.totalDays
+      : Number(membershipForm.totalDays);
+
+  const parsedRemainingDays =
+    membershipForm.remainingDays.trim() === ""
+      ? selectedUser.remainingDays
+      : Number(membershipForm.remainingDays);
+
+  if (
+    parsedTotalDays !== undefined &&
+    parsedTotalDays !== null &&
+    Number.isNaN(parsedTotalDays)
+  ) {
+    setError("Total days must be a valid number");
+    return;
+  }
+
+  if (
+    parsedRemainingDays !== undefined &&
+    parsedRemainingDays !== null &&
+    Number.isNaN(parsedRemainingDays)
+  ) {
+    setError("Remaining days must be a valid number");
+    return;
+  }
+
+  if ((parsedRemainingDays ?? 0) < 0 || (parsedTotalDays ?? 0) < 0) {
+    setError("Days cannot be negative");
+    return;
+  }
+
+  const planChanged = selectedUser.membershipPlan !== membershipForm.membershipPlan;
+  const statusChanged =
+    (selectedUser.membershipStatus || "inactive") !== membershipForm.membershipStatus;
+  const daysGoingToZero =
+    (selectedUser.remainingDays ?? 0) > 0 && (parsedRemainingDays ?? 0) === 0;
+
+  let confirmMessage = "";
+
+  if (planChanged || statusChanged || daysGoingToZero) {
+    confirmMessage =
+      `Please confirm this membership update:\n\n` +
+      `Member: ${selectedUser.fullName || selectedUser.name}\n` +
+      `Status: ${selectedUser.membershipStatus || "inactive"} → ${membershipForm.membershipStatus}\n` +
+      `Plan: ${selectedUser.membershipPlan || "No Plan"} → ${membershipForm.membershipPlan}\n` +
+      `Total Days: ${selectedUser.totalDays ?? 0} → ${parsedTotalDays ?? 0}\n` +
+      `Remaining Days: ${selectedUser.remainingDays ?? 0} → ${parsedRemainingDays ?? 0}\n\n` +
+      `Do you want to continue?`;
+
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) return;
+  }
+
+  try {
+    setError("");
+    setSuccessMessage("");
+
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/membership`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        userId: membershipForm.userId,
+        membershipStatus: membershipForm.membershipStatus,
+        membershipPlan: membershipForm.membershipPlan,
+        membershipStartDate: membershipForm.membershipStartDate || null,
+        membershipEndDate: membershipForm.membershipEndDate || null,
+        totalDays: parsedTotalDays,
+        remainingDays: parsedRemainingDays,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.message || "Failed to update membership");
       return;
     }
 
-    if (
-      !membershipForm.userId ||
-      !membershipForm.membershipStatus ||
-      !membershipForm.membershipPlan
-    ) {
-      setError("Please fill user ID, status, and plan");
-      return;
-    }
-
-    try {
-      setError("");
-      setSuccessMessage("");
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/membership`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          userId: membershipForm.userId,
-          membershipStatus: membershipForm.membershipStatus,
-          membershipPlan: membershipForm.membershipPlan,
-          membershipStartDate: membershipForm.membershipStartDate || null,
-          membershipEndDate: membershipForm.membershipEndDate || null,
-          totalDays: membershipForm.totalDays ? Number(membershipForm.totalDays) : 0,
-          remainingDays: membershipForm.remainingDays
-            ? Number(membershipForm.remainingDays)
-            : 0,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to update membership");
-        return;
-      }
-
-      setSuccessMessage("Membership updated successfully ✅");
-      await refreshUsers();
-    } catch {
-      setError("Something went wrong while updating membership");
-    }
-  };
+    setSuccessMessage("Membership updated successfully ✅");
+    await refreshUsers();
+  } catch {
+    setError("Something went wrong while updating membership");
+  }
+};
 
   const handleManualPayment = async () => {
     const token = localStorage.getItem("token");
@@ -953,6 +1013,10 @@ export default function AdminPage() {
       return matchesSearch && matchesStatus;
     });
   }, [sortedUsers, searchTerm, statusFilter]);
+
+  const selectedMembershipUser = useMemo(() => {
+  return users.find((user) => user._id === membershipForm.userId) || null;
+}, [users, membershipForm.userId]);
 
   const displayedUsers = useMemo(() => {
     return showAllUsers
@@ -2368,11 +2432,43 @@ const integrationStatusCards = useMemo(
 </p>
 <p className="mt-1">
   End:{" "}
+
+
+
   <span className="font-semibold text-white">
     {membershipForm.membershipEndDate || "Auto / Not set"}
   </span>
 </p>
+{selectedMembershipUser && (
+  <div className="mt-3 border-t border-white/10 pt-3">
+    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+      Current Saved Values
+    </div>
+
+    <div className="mt-2 text-sm text-gray-300">
+      Current Status:{" "}
+      <span className="font-semibold text-white">
+        {selectedMembershipUser.membershipStatus || "inactive"}
+      </span>
+    </div>
+
+    <div className="mt-1 text-sm text-gray-300">
+      Current Plan:{" "}
+      <span className="font-semibold text-white">
+        {selectedMembershipUser.membershipPlan || "No Plan"}
+      </span>
+    </div>
+
+    <div className="mt-1 text-sm text-gray-300">
+      Current Total / Remaining:{" "}
+      <span className="font-semibold text-cyan-400">
+        {selectedMembershipUser.totalDays ?? 0} / {selectedMembershipUser.remainingDays ?? 0}
+      </span>
+    </div>
+  </div>
+)}
                   </div>
+                  
 
                   <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -2400,6 +2496,15 @@ const integrationStatusCards = useMemo(
                     >
                       Clear Form
                     </button>
+
+                    {selectedMembershipUser &&
+  membershipForm.remainingDays.trim() !== "" &&
+  Number(membershipForm.remainingDays) === 0 && (
+    <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm font-semibold text-yellow-200">
+      Warning: you are about to save this member with 0 remaining days.
+    </div>
+)}
+
                   </div>
                 </div>
               </div>
