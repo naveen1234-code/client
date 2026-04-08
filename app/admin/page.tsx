@@ -29,14 +29,19 @@ type UserType = {
   lastExitAt?: string | null;
 };
 
-type MembershipFormType = {
+
+
+type SmartMembershipFormType = {
   userId: string;
   membershipStatus: string;
   membershipPlan: string;
   membershipStartDate: string;
-  membershipEndDate: string;
+};
+
+type SmartMembershipOverridesType = {
   totalDays: string;
   remainingDays: string;
+  membershipEndDate: string;
 };
 
 type ManualPaymentFormType = {
@@ -136,6 +141,37 @@ const calculateEndDate = (startDate: string, days: number) => {
   return date.toISOString().split("T")[0];
 };
 
+const formatDateOnly = (date: Date) => {
+  return date.toISOString().split("T")[0];
+};
+
+const getTodayDateOnly = () => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return today;
+};
+
+const calculateUsedDays = (startDate: string) => {
+  if (!startDate) return 0;
+
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+
+  const today = getTodayDateOnly();
+
+  if (start > today) return 0;
+
+  const diffMs = today.getTime() - start.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+};
+
+const calculateRemainingDaysFromStart = (startDate: string, totalDays: number) => {
+  if (!startDate || !totalDays) return 0;
+
+  const usedDays = calculateUsedDays(startDate);
+  return Math.max(totalDays - usedDays, 0);
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const currentDate = new Date();
@@ -151,7 +187,6 @@ export default function AdminPage() {
   const [insideMembers, setInsideMembers] = useState<UserType[]>([]);
   const [accessStats, setAccessStats] = useState<AccessStatsType | null>(null);
   const [showAdminInstallPopup, setShowAdminInstallPopup] = useState(false);
-  const [showMembershipAdvanced, setShowMembershipAdvanced] = useState(false);
 
   const [statementMonth, setStatementMonth] = useState(currentDate.getMonth() + 1);
   const [statementYear, setStatementYear] = useState(currentDate.getFullYear());
@@ -159,15 +194,23 @@ export default function AdminPage() {
   const [statementTotalRevenue, setStatementTotalRevenue] = useState(0);
   const [statementTotalPayments, setStatementTotalPayments] = useState(0);
 
-  const [membershipForm, setMembershipForm] = useState<MembershipFormType>({
-    userId: "",
-    membershipStatus: "active",
-    membershipPlan: "1 Month",
-    membershipStartDate: "",
-    membershipEndDate: "",
+
+
+  const [smartMembershipForm, setSmartMembershipForm] = useState<SmartMembershipFormType>({
+  userId: "",
+  membershipStatus: "active",
+  membershipPlan: "1 Month",
+  membershipStartDate: "",
+});
+
+const [smartMembershipOverrides, setSmartMembershipOverrides] =
+  useState<SmartMembershipOverridesType>({
     totalDays: "",
     remainingDays: "",
+    membershipEndDate: "",
   });
+
+const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
 
   const [manualPaymentForm, setManualPaymentForm] = useState<ManualPaymentFormType>({
     userId: "",
@@ -318,21 +361,7 @@ export default function AdminPage() {
     fetchAdminData();
   }, [router]);
 
-  useEffect(() => {
-  const days = getPlanDays(membershipForm.membershipPlan);
 
-  if (!showMembershipAdvanced) {
-    setMembershipForm((prev) => ({
-      ...prev,
-      totalDays: String(days),
-      membershipEndDate: calculateEndDate(prev.membershipStartDate, days),
-    }));
-  }
-}, [
-  membershipForm.membershipPlan,
-  membershipForm.membershipStartDate,
-  showMembershipAdvanced,
-]);
 
   useEffect(() => {
   const alreadySeen = localStorage.getItem("gymRavanaAdminInstallPopupSeen");
@@ -535,7 +564,7 @@ export default function AdminPage() {
     }
   };
 
-  const handleMembershipUpdate = async () => {
+  const handleSmartMembershipUpdate = async () => {
   const token = localStorage.getItem("token");
 
   if (!token) {
@@ -543,76 +572,84 @@ export default function AdminPage() {
     return;
   }
 
-  if (
-    !membershipForm.userId ||
-    !membershipForm.membershipStatus ||
-    !membershipForm.membershipPlan
-  ) {
-    setError("Please fill user ID, status, and plan");
+  if (!selectedSmartMember) {
+    setError("Please select a member");
     return;
   }
 
-  const selectedUser = users.find((user) => user._id === membershipForm.userId);
-
-  if (!selectedUser) {
-    setError("Selected user not found");
+  if (!smartMembershipFinalValues.userId) {
+    setError("Member selection is missing");
     return;
   }
 
-  const parsedTotalDays =
-    membershipForm.totalDays.trim() === ""
-      ? selectedUser.totalDays
-      : Number(membershipForm.totalDays);
-
-  const parsedRemainingDays =
-    membershipForm.remainingDays.trim() === ""
-      ? selectedUser.remainingDays
-      : Number(membershipForm.remainingDays);
-
-  if (
-    parsedTotalDays !== undefined &&
-    parsedTotalDays !== null &&
-    Number.isNaN(parsedTotalDays)
-  ) {
-    setError("Total days must be a valid number");
+  if (!smartMembershipFinalValues.membershipPlan) {
+    setError("Please select a membership plan");
     return;
   }
 
-  if (
-    parsedRemainingDays !== undefined &&
-    parsedRemainingDays !== null &&
-    Number.isNaN(parsedRemainingDays)
-  ) {
-    setError("Remaining days must be a valid number");
+  if (!smartMembershipFinalValues.membershipStartDate) {
+    setError("Please select a membership start date");
     return;
   }
 
-  if ((parsedRemainingDays ?? 0) < 0 || (parsedTotalDays ?? 0) < 0) {
+  if (smartMembershipFinalValues.totalDays < 0 || smartMembershipFinalValues.remainingDays < 0) {
     setError("Days cannot be negative");
     return;
   }
 
-  const planChanged = selectedUser.membershipPlan !== membershipForm.membershipPlan;
+  const planChanged =
+    (selectedSmartMember.membershipPlan || "No Plan") !==
+    smartMembershipFinalValues.membershipPlan;
+
   const statusChanged =
-    (selectedUser.membershipStatus || "inactive") !== membershipForm.membershipStatus;
+    (selectedSmartMember.membershipStatus || "inactive") !==
+    smartMembershipFinalValues.membershipStatus;
+
+  const daysChanged =
+    (selectedSmartMember.totalDays ?? 0) !== smartMembershipFinalValues.totalDays ||
+    (selectedSmartMember.remainingDays ?? 0) !== smartMembershipFinalValues.remainingDays;
+
+  const startChanged =
+    (selectedSmartMember.membershipStartDate
+      ? new Date(selectedSmartMember.membershipStartDate).toISOString().split("T")[0]
+      : "") !== (smartMembershipFinalValues.membershipStartDate || "");
+
+  const endChanged =
+    (selectedSmartMember.membershipEndDate
+      ? new Date(selectedSmartMember.membershipEndDate).toISOString().split("T")[0]
+      : "") !== (smartMembershipFinalValues.membershipEndDate || "");
+
   const daysGoingToZero =
-    (selectedUser.remainingDays ?? 0) > 0 && (parsedRemainingDays ?? 0) === 0;
+    (selectedSmartMember.remainingDays ?? 0) > 0 &&
+    smartMembershipFinalValues.remainingDays === 0;
 
-  let confirmMessage = "";
-
-  if (planChanged || statusChanged || daysGoingToZero) {
-    confirmMessage =
-      `Please confirm this membership update:\n\n` +
-      `Member: ${selectedUser.fullName || selectedUser.name}\n` +
-      `Status: ${selectedUser.membershipStatus || "inactive"} → ${membershipForm.membershipStatus}\n` +
-      `Plan: ${selectedUser.membershipPlan || "No Plan"} → ${membershipForm.membershipPlan}\n` +
-      `Total Days: ${selectedUser.totalDays ?? 0} → ${parsedTotalDays ?? 0}\n` +
-      `Remaining Days: ${selectedUser.remainingDays ?? 0} → ${parsedRemainingDays ?? 0}\n\n` +
-      `Do you want to continue?`;
-
-    const confirmed = window.confirm(confirmMessage);
-    if (!confirmed) return;
+  if (!(planChanged || statusChanged || daysChanged || startChanged || endChanged)) {
+    setError("No membership changes detected");
+    return;
   }
+
+  const confirmMessage =
+    `Please confirm this smart membership update:\n\n` +
+    `Member: ${selectedSmartMember.fullName || selectedSmartMember.name}\n` +
+    `Status: ${selectedSmartMember.membershipStatus || "inactive"} → ${smartMembershipFinalValues.membershipStatus}\n` +
+    `Plan: ${selectedSmartMember.membershipPlan || "No Plan"} → ${smartMembershipFinalValues.membershipPlan}\n` +
+    `Start: ${
+      selectedSmartMember.membershipStartDate
+        ? new Date(selectedSmartMember.membershipStartDate).toISOString().split("T")[0]
+        : "Not set"
+    } → ${smartMembershipFinalValues.membershipStartDate || "Not set"}\n` +
+    `End: ${
+      selectedSmartMember.membershipEndDate
+        ? new Date(selectedSmartMember.membershipEndDate).toISOString().split("T")[0]
+        : "Not set"
+    } → ${smartMembershipFinalValues.membershipEndDate || "Not set"}\n` +
+    `Total Days: ${selectedSmartMember.totalDays ?? 0} → ${smartMembershipFinalValues.totalDays}\n` +
+    `Remaining Days: ${selectedSmartMember.remainingDays ?? 0} → ${smartMembershipFinalValues.remainingDays}\n\n` +
+    `${daysGoingToZero ? "Warning: remaining days will become 0.\n\n" : ""}` +
+    `Do you want to continue?`;
+
+  const confirmed = window.confirm(confirmMessage);
+  if (!confirmed) return;
 
   try {
     setError("");
@@ -624,15 +661,7 @@ export default function AdminPage() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify({
-        userId: membershipForm.userId,
-        membershipStatus: membershipForm.membershipStatus,
-        membershipPlan: membershipForm.membershipPlan,
-        membershipStartDate: membershipForm.membershipStartDate || null,
-        membershipEndDate: membershipForm.membershipEndDate || null,
-        totalDays: parsedTotalDays,
-        remainingDays: parsedRemainingDays,
-      }),
+      body: JSON.stringify(smartMembershipFinalValues),
     });
 
     const data = await res.json();
@@ -643,11 +672,19 @@ export default function AdminPage() {
     }
 
     setSuccessMessage("Membership updated successfully ✅");
+
     await refreshUsers();
+
+    const refreshedUser = users.find((user) => user._id === smartMembershipFinalValues.userId);
+    if (refreshedUser) {
+      loadSmartMembershipFromUser(refreshedUser);
+    }
   } catch {
-    setError("Something went wrong while updating membership");
+    setError("Something went wrong while updating smart membership");
   }
 };
+
+
 
   const handleManualPayment = async () => {
     const token = localStorage.getItem("token");
@@ -717,30 +754,66 @@ export default function AdminPage() {
     }
   };
 
+const loadSmartMembershipFromUser = (user: UserType) => {
+  setSmartMembershipForm({
+    userId: user._id,
+    membershipStatus: user.membershipStatus || "inactive",
+    membershipPlan: user.membershipPlan || "1 Month",
+    membershipStartDate: user.membershipStartDate
+      ? new Date(user.membershipStartDate).toISOString().split("T")[0]
+      : "",
+  });
+
+  setSmartMembershipOverrides({
+    totalDays: "",
+    remainingDays: "",
+    membershipEndDate: "",
+  });
+
+  setShowSmartAdvanced(false);
+};
+
+const resetSmartMembershipBuilder = () => {
+  setSmartMembershipForm({
+    userId: "",
+    membershipStatus: "active",
+    membershipPlan: "1 Month",
+    membershipStartDate: "",
+  });
+
+  setSmartMembershipOverrides({
+    totalDays: "",
+    remainingDays: "",
+    membershipEndDate: "",
+  });
+
+  setShowSmartAdvanced(false);
+};
+
+const handleSmartMemberSelect = (userId: string) => {
+  const user = users.find((item) => item._id === userId);
+
+  if (!user) {
+    resetSmartMembershipBuilder();
+    return;
+  }
+
+  loadSmartMembershipFromUser(user);
+  setSuccessMessage("");
+  setError("");
+};
+
   const handleSelectUser = (user: UserType) => {
-    setMembershipForm({
-      userId: user._id,
-      membershipStatus: user.membershipStatus || "inactive",
-      membershipPlan: user.membershipPlan || "No Plan",
-      membershipStartDate: user.membershipStartDate
-        ? new Date(user.membershipStartDate).toISOString().split("T")[0]
-        : "",
-      membershipEndDate: user.membershipEndDate
-        ? new Date(user.membershipEndDate).toISOString().split("T")[0]
-        : "",
-      totalDays: user.totalDays !== undefined ? String(user.totalDays) : "",
-      remainingDays: user.remainingDays !== undefined ? String(user.remainingDays) : "",
-    });
+  setManualPaymentForm((prev) => ({
+    ...prev,
+    userId: user._id,
+    planName: user.membershipPlan || "1 Month",
+  }));
 
-    setManualPaymentForm((prev) => ({
-      ...prev,
-      userId: user._id,
-      planName: user.membershipPlan || "1 Month",
-    }));
-
-    setSuccessMessage("");
-    setError("");
-  };
+  setSuccessMessage("");
+  setError("");
+  loadSmartMembershipFromUser(user);
+};
 
   const handleBookingStatusUpdate = async (
     bookingId: string,
@@ -1014,9 +1087,161 @@ export default function AdminPage() {
     });
   }, [sortedUsers, searchTerm, statusFilter]);
 
-  const selectedMembershipUser = useMemo(() => {
-  return users.find((user) => user._id === membershipForm.userId) || null;
-}, [users, membershipForm.userId]);
+
+
+const selectedSmartMember = useMemo(() => {
+  return users.find((user) => user._id === smartMembershipForm.userId) || null;
+}, [users, smartMembershipForm.userId]);
+
+const smartMembershipCalculation = useMemo(() => {
+  const baseTotalDays = getPlanDays(smartMembershipForm.membershipPlan);
+
+  const totalDays = showSmartAdvanced && smartMembershipOverrides.totalDays.trim() !== ""
+    ? Number(smartMembershipOverrides.totalDays)
+    : baseTotalDays;
+
+  const startDate = smartMembershipForm.membershipStartDate;
+
+  const calculatedEndDate =
+    startDate && totalDays > 0 ? calculateEndDate(startDate, totalDays) : "";
+
+  const endDate =
+    showSmartAdvanced && smartMembershipOverrides.membershipEndDate.trim() !== ""
+      ? smartMembershipOverrides.membershipEndDate
+      : calculatedEndDate;
+
+  const calculatedUsedDays = startDate ? calculateUsedDays(startDate) : 0;
+
+  const calculatedRemainingDays =
+    startDate && totalDays > 0
+      ? calculateRemainingDaysFromStart(startDate, totalDays)
+      : 0;
+
+  const remainingDays =
+    showSmartAdvanced && smartMembershipOverrides.remainingDays.trim() !== ""
+      ? Number(smartMembershipOverrides.remainingDays)
+      : calculatedRemainingDays;
+
+  const today = getTodayDateOnly();
+  const start = startDate ? new Date(startDate) : null;
+  if (start) start.setHours(0, 0, 0, 0);
+
+  let previewStatus = "Incomplete";
+
+  if (!selectedSmartMember || !smartMembershipForm.membershipPlan || !startDate) {
+    previewStatus = "Incomplete";
+  } else if (smartMembershipForm.membershipStatus === "inactive") {
+    previewStatus = "Inactive";
+  } else if (start && start > today) {
+    previewStatus = "Scheduled";
+  } else if (remainingDays <= 0 || smartMembershipForm.membershipStatus === "expired") {
+    previewStatus = "Expired";
+  } else if (showSmartAdvanced) {
+    previewStatus = "Manual Override";
+  } else {
+    previewStatus = "Active";
+  }
+
+  const progressPercent =
+    totalDays > 0
+      ? Math.min(100, Math.max(0, Math.round(((totalDays - remainingDays) / totalDays) * 100)))
+      : 0;
+
+  return {
+    totalDays,
+    usedDays: calculatedUsedDays,
+    remainingDays,
+    endDate,
+    previewStatus,
+    progressPercent,
+  };
+}, [
+  selectedSmartMember,
+  smartMembershipForm.membershipPlan,
+  smartMembershipForm.membershipStatus,
+  smartMembershipForm.membershipStartDate,
+  showSmartAdvanced,
+  smartMembershipOverrides.totalDays,
+  smartMembershipOverrides.remainingDays,
+  smartMembershipOverrides.membershipEndDate,
+]);
+
+const smartMembershipWarnings = useMemo(() => {
+  const warnings: string[] = [];
+
+  if (!selectedSmartMember) {
+    warnings.push("Select a member to begin.");
+    return warnings;
+  }
+
+  if (!smartMembershipForm.membershipStartDate) {
+    warnings.push("Select a membership start date.");
+  }
+
+  if (smartMembershipForm.membershipPlan === "No Plan") {
+    warnings.push("Selected plan has 0 total days.");
+  }
+
+  if (smartMembershipCalculation.remainingDays <= 0 && smartMembershipForm.membershipStartDate) {
+    warnings.push("This update will result in 0 remaining days.");
+  }
+
+  if (smartMembershipForm.membershipStatus === "expired") {
+    warnings.push("You are about to save this membership as expired.");
+  }
+
+  if (selectedSmartMember.isInsideGym) {
+    warnings.push("This member is currently marked as inside the gym.");
+  }
+
+  if (showSmartAdvanced) {
+    if (smartMembershipOverrides.totalDays.trim() !== "") {
+      warnings.push("Manual total days override is active.");
+    }
+    if (smartMembershipOverrides.remainingDays.trim() !== "") {
+      warnings.push("Manual remaining days override is active.");
+    }
+    if (smartMembershipOverrides.membershipEndDate.trim() !== "") {
+      warnings.push("Manual end date override is active.");
+    }
+  }
+
+  return warnings;
+}, [
+  selectedSmartMember,
+  smartMembershipForm.membershipStartDate,
+  smartMembershipForm.membershipPlan,
+  smartMembershipForm.membershipStatus,
+  smartMembershipCalculation.remainingDays,
+  showSmartAdvanced,
+  smartMembershipOverrides.totalDays,
+  smartMembershipOverrides.remainingDays,
+  smartMembershipOverrides.membershipEndDate,
+]);
+
+const smartMembershipFinalValues = useMemo(() => {
+  return {
+    userId: smartMembershipForm.userId,
+    membershipStatus:
+      smartMembershipCalculation.previewStatus === "Expired"
+        ? "expired"
+        : smartMembershipForm.membershipStatus,
+    membershipPlan: smartMembershipForm.membershipPlan,
+    membershipStartDate: smartMembershipForm.membershipStartDate || null,
+    membershipEndDate: smartMembershipCalculation.endDate || null,
+    totalDays: smartMembershipCalculation.totalDays,
+    remainingDays: smartMembershipCalculation.remainingDays,
+  };
+}, [
+  smartMembershipForm.userId,
+  smartMembershipForm.membershipStatus,
+  smartMembershipForm.membershipPlan,
+  smartMembershipForm.membershipStartDate,
+  smartMembershipCalculation.previewStatus,
+  smartMembershipCalculation.endDate,
+  smartMembershipCalculation.totalDays,
+  smartMembershipCalculation.remainingDays,
+]);
 
   const displayedUsers = useMemo(() => {
     return showAllUsers
@@ -1196,6 +1421,8 @@ export default function AdminPage() {
     )[0] || null,
   [paidPayments]
 );
+
+
 
 const latestManualReceipt = useMemo(
   () =>
@@ -2242,272 +2469,344 @@ const integrationStatusCards = useMemo(
 
           <div className="grid gap-10 xl:grid-cols-[0.95fr_1.05fr]">
             <section className="space-y-8">
-              <div
-                ref={setSectionRef("membership-control")}
-                className={`rounded-[30px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur sm:p-8 ${
-                  highlightedSection === "membership-control"
-                    ? "ring-4 ring-red-500/60 shadow-[0_0_35px_rgba(239,68,68,0.45)] transition-all duration-300"
-                    : ""
-                }`}
-              >
-                <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-red-400">
-                  Membership Control
-                </p>
-                <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white">
-                  Update Member Plan
-                </h2>
-
-                <div className="mt-6 grid gap-4 md:grid-cols-2">
-  <select
-    value={membershipForm.userId}
-    onChange={(e) =>
-      setMembershipForm({
-        ...membershipForm,
-        userId: e.target.value,
-      })
-    }
-    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500 md:col-span-2"
-  >
-    <option value="">Select Member</option>
-    {users.map((user) => (
-      <option key={user._id} value={user._id}>
-        {(user.fullName || user.name) + " — " + user.email}
-      </option>
-    ))}
-  </select>
-
-  <select
-    value={membershipForm.membershipStatus}
-    onChange={(e) =>
-      setMembershipForm({
-        ...membershipForm,
-        membershipStatus: e.target.value,
-      })
-    }
-    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-  >
-    <option value="active">active</option>
-    <option value="inactive">inactive</option>
-    <option value="expired">expired</option>
-  </select>
-
-  <select
-    value={membershipForm.membershipPlan}
-    onChange={(e) =>
-      setMembershipForm({
-        ...membershipForm,
-        membershipPlan: e.target.value,
-      })
-    }
-    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-  >
-    <option value="1 Month">1 Month</option>
-    <option value="3 Months">3 Months</option>
-    <option value="6 Months">6 Months</option>
-    <option value="1 Year">1 Year</option>
-    <option value="No Plan">No Plan</option>
-  </select>
-
-<input
-  type="date"
-  value={membershipForm.membershipStartDate}
-  onChange={(e) =>
-    setMembershipForm({
-      ...membershipForm,
-      membershipStartDate: e.target.value,
-    })
-  }
-  onClick={(e) => {
-    const input = e.currentTarget as HTMLInputElement & {
-      showPicker?: () => void;
-    };
-    input.showPicker?.();
-  }}
-  onFocus={(e) => {
-    const input = e.currentTarget as HTMLInputElement & {
-      showPicker?: () => void;
-    };
-    input.showPicker?.();
-  }}
-  className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
- />
-
-  <input
-    type="number"
-    placeholder="Remaining Days"
-    value={membershipForm.remainingDays}
-    onChange={(e) =>
-      setMembershipForm({
-        ...membershipForm,
-        remainingDays: e.target.value,
-      })
-    }
-    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-  />
-
-  <button
-    type="button"
-    onClick={() => setShowMembershipAdvanced((prev) => !prev)}
-    className="md:col-span-2 rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/30 hover:bg-red-500/10"
-  >
-    {showMembershipAdvanced ? "Hide Advanced Fields" : "Show Advanced Fields"}
-  </button>
-
-  {showMembershipAdvanced && (
-    <>
-      <input
-  type="date"
-  value={membershipForm.membershipEndDate}
-  onChange={(e) =>
-    setMembershipForm({
-      ...membershipForm,
-      membershipEndDate: e.target.value,
-    })
-  }
-  onClick={(e) => {
-    const input = e.currentTarget as HTMLInputElement & {
-      showPicker?: () => void;
-    };
-    input.showPicker?.();
-  }}
-  onFocus={(e) => {
-    const input = e.currentTarget as HTMLInputElement & {
-      showPicker?: () => void;
-    };
-    input.showPicker?.();
-  }}
-  className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-/>
-
-      <input
-        type="number"
-        placeholder="Total Days"
-        value={membershipForm.totalDays}
-        onChange={(e) =>
-          setMembershipForm({
-            ...membershipForm,
-            totalDays: e.target.value,
-          })
-        }
-        className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-      />
-    </>
-  )}
-</div>
-
-                <div className="mt-6 flex flex-col gap-4 xl:flex-row xl:items-stretch">
-                  <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-4 text-sm text-gray-300 xl:min-w-[260px]">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-                      Update Preview
-                    </p>
-                    <p className="mt-2">
-                      User ID:{" "}
-                      <span className="font-semibold text-white">
-                        {membershipForm.userId || "Not selected"}
-                      </span>
-                    </p>
-                    <p className="mt-1">
-                      Status:{" "}
-                      <span className="font-semibold text-yellow-400">
-                        {membershipForm.membershipStatus}
-                      </span>
-                    </p>
-                    <p className="mt-1">
-                      Plan:{" "}
-                      <span className="font-semibold text-white">
-                        {membershipForm.membershipPlan}
-                      </span>
-                    </p>
-                    <p className="mt-1">
-  Total / Remaining:{" "}
-  <span className="font-semibold text-green-400">
-    {membershipForm.totalDays || "0"} / {membershipForm.remainingDays || "0"}
-  </span>
-</p>
-<p className="mt-1">
-  Start:{" "}
-  <span className="font-semibold text-white">
-    {membershipForm.membershipStartDate || "Not set"}
-  </span>
-</p>
-<p className="mt-1">
-  End:{" "}
-
-
-
-  <span className="font-semibold text-white">
-    {membershipForm.membershipEndDate || "Auto / Not set"}
-  </span>
-</p>
-{selectedMembershipUser && (
-  <div className="mt-3 border-t border-white/10 pt-3">
-    <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-      Current Saved Values
+ <div
+  ref={setSectionRef("membership-control")}
+  className={`rounded-[30px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur sm:p-8 ${
+    highlightedSection === "membership-control"
+      ? "ring-4 ring-cyan-500/60 shadow-[0_0_35px_rgba(34,211,238,0.35)] transition-all duration-300"
+      : ""
+  }`}
+>
+  <div className="flex flex-col gap-2">
+    <div>
+      <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-cyan-300">
+        Membership Control
+      </p>
+      <h2 className="mt-2 text-3xl font-black uppercase tracking-tight text-white">
+        Update Member Plan
+      </h2>
+      <p className="mt-2 text-sm text-gray-400">
+        Select a member, choose a plan, and update instantly.
+      </p>
     </div>
 
-    <div className="mt-2 text-sm text-gray-300">
-      Current Status:{" "}
-      <span className="font-semibold text-white">
-        {selectedMembershipUser.membershipStatus || "inactive"}
-      </span>
-    </div>
 
-    <div className="mt-1 text-sm text-gray-300">
-      Current Plan:{" "}
-      <span className="font-semibold text-white">
-        {selectedMembershipUser.membershipPlan || "No Plan"}
-      </span>
-    </div>
-
-    <div className="mt-1 text-sm text-gray-300">
-      Current Total / Remaining:{" "}
-      <span className="font-semibold text-cyan-400">
-        {selectedMembershipUser.totalDays ?? 0} / {selectedMembershipUser.remainingDays ?? 0}
-      </span>
-    </div>
   </div>
-)}
-                  </div>
-                  
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={handleMembershipUpdate}
-                      className="h-12 rounded-xl bg-red-600 px-6 text-sm font-bold uppercase tracking-[0.15em] text-white transition duration-300 hover:bg-red-700"
-                    >
-                      Update Membership
-                    </button>
+  <div className="mt-6 space-y-6">
+    <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+      <div className="rounded-[24px] border border-white/10 bg-black/25 p-5">
+        <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">
+          Select Member
+        </label>
 
-                    <button
-                      onClick={() => {
-                        setMembershipForm({
-                          userId: "",
-                          membershipStatus: "active",
-                          membershipPlan: "1 Month",
-                          membershipStartDate: "",
-                          membershipEndDate: "",
-                          totalDays: "",
-                          remainingDays: "",
-                        });
-                        setSuccessMessage("");
-                        setError("");
-                      }}
-                      className="h-12 rounded-xl border border-white/10 bg-white/5 px-6 text-sm font-bold uppercase tracking-[0.15em] text-white transition duration-300 hover:border-red-500/30 hover:bg-red-500/10"
-                    >
-                      Clear Form
-                    </button>
+        <select
+          value={smartMembershipForm.userId}
+          onChange={(e) => handleSmartMemberSelect(e.target.value)}
+          className="mt-3 w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+        >
+          <option value="">Choose Member</option>
+          {users.map((user) => (
+            <option key={user._id} value={user._id}>
+              {(user.fullName || user.name) + " — " + user.email}
+            </option>
+          ))}
+        </select>
+      </div>
 
-                    {selectedMembershipUser &&
-  membershipForm.remainingDays.trim() !== "" &&
-  Number(membershipForm.remainingDays) === 0 && (
-    <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-sm font-semibold text-yellow-200">
-      Warning: you are about to save this member with 0 remaining days.
-    </div>
-)}
+      <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+          Selected
+        </p>
 
-                  </div>
-                </div>
+        {selectedSmartMember ? (
+          <>
+            <p className="mt-2 text-lg font-black uppercase text-white">
+              {selectedSmartMember.fullName || selectedSmartMember.name}
+            </p>
+            <div className="mt-3 grid gap-2 text-sm text-gray-200 sm:grid-cols-2">
+              <div>
+                Plan:{" "}
+                <span className="font-semibold text-white">
+                  {selectedSmartMember.membershipPlan || "No Plan"}
+                </span>
               </div>
+              <div>
+                Remaining:{" "}
+                <span className="font-semibold text-green-300">
+                  {selectedSmartMember.remainingDays ?? 0}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="mt-3 text-sm text-gray-300">
+            No member selected yet.
+          </p>
+        )}
+      </div>
+    </div>
+
+    <div className="grid gap-4 md:grid-cols-[0.9fr_0.9fr_1.2fr]">
+      <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+          Status
+        </label>
+        <select
+          value={smartMembershipForm.membershipStatus}
+          onChange={(e) =>
+            setSmartMembershipForm((prev) => ({
+              ...prev,
+              membershipStatus: e.target.value,
+            }))
+          }
+          className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+        >
+          <option value="active">active</option>
+          <option value="inactive">inactive</option>
+          <option value="expired">expired</option>
+        </select>
+      </div>
+
+      <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+          Plan
+        </label>
+        <select
+          value={smartMembershipForm.membershipPlan}
+          onChange={(e) =>
+            setSmartMembershipForm((prev) => ({
+              ...prev,
+              membershipPlan: e.target.value,
+            }))
+          }
+          className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+        >
+          <option value="1 Month">1 Month</option>
+          <option value="3 Months">3 Months</option>
+          <option value="6 Months">6 Months</option>
+          <option value="1 Year">1 Year</option>
+          <option value="No Plan">No Plan</option>
+        </select>
+      </div>
+
+      <div className="rounded-[22px] border border-white/10 bg-black/20 p-4">
+        <label className="mb-2 block text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+          Start Date
+        </label>
+        <input
+          type="date"
+          value={smartMembershipForm.membershipStartDate}
+          onChange={(e) =>
+            setSmartMembershipForm((prev) => ({
+              ...prev,
+              membershipStartDate: e.target.value,
+            }))
+          }
+   onMouseDown={(e) => {
+  const input = e.currentTarget as HTMLInputElement & {
+    showPicker?: () => void;
+  };
+
+  try {
+    input.showPicker?.();
+  } catch {}
+}}
+          className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+        />
+      </div>
+    </div>
+
+    <div className="grid gap-4 md:grid-cols-2">
+      <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+          Total Days
+        </p>
+        <p className="mt-2 text-3xl font-black text-white">
+          {smartMembershipCalculation.totalDays}
+        </p>
+      </div>
+
+      <div className="rounded-[22px] border border-green-500/20 bg-green-500/10 p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-green-300">
+          Remaining
+        </p>
+        <p className="mt-2 text-3xl font-black text-green-400">
+          {smartMembershipCalculation.remainingDays}
+        </p>
+      </div>
+
+      <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+          End Date
+        </p>
+        <p className="mt-2 text-base font-black break-words text-white">
+          {smartMembershipCalculation.endDate || "Not calculated"}
+        </p>
+      </div>
+
+      <div className="rounded-[22px] border border-cyan-500/20 bg-cyan-500/10 p-4 md:col-span-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+          Live Status
+        </p>
+        <p className="mt-2 text-xl font-black text-white">
+          {smartMembershipCalculation.previewStatus}
+        </p>
+      </div>
+    </div>
+
+    <div className="rounded-[24px] border border-white/10 bg-black/20 p-4">
+      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+        Current Saved Values
+      </p>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5 text-sm">
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Status</p>
+          <p className="mt-1 font-semibold text-white">
+            {selectedSmartMember?.membershipStatus || "inactive"}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Plan</p>
+          <p className="mt-1 font-semibold text-white">
+            {selectedSmartMember?.membershipPlan || "No Plan"}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Start</p>
+          <p className="mt-1 font-semibold text-white">
+            {selectedSmartMember?.membershipStartDate
+              ? new Date(selectedSmartMember.membershipStartDate).toISOString().split("T")[0]
+              : "Not set"}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">End</p>
+          <p className="mt-1 font-semibold text-white">
+            {selectedSmartMember?.membershipEndDate
+              ? new Date(selectedSmartMember.membershipEndDate).toISOString().split("T")[0]
+              : "Not set"}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-gray-500">Days</p>
+          <p className="mt-1 font-semibold text-cyan-400">
+            {selectedSmartMember?.totalDays ?? 0} / {selectedSmartMember?.remainingDays ?? 0}
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {smartMembershipWarnings.length > 0 && (
+      <div className="space-y-3">
+        {smartMembershipWarnings.map((warning, index) => (
+          <div
+            key={`${warning}-${index}`}
+            className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-3 text-sm font-semibold text-yellow-200"
+          >
+            {warning}
+          </div>
+        ))}
+      </div>
+    )}
+
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={handleSmartMembershipUpdate}
+        className="h-14 w-full rounded-2xl bg-cyan-600 px-6 text-sm font-bold uppercase tracking-[0.16em] text-white transition duration-300 hover:bg-cyan-700"
+      >
+        Update Membership
+      </button>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <button
+          type="button"
+          onClick={resetSmartMembershipBuilder}
+          className="h-14 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-bold uppercase tracking-[0.16em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+        >
+          Reset
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowSmartAdvanced((prev) => !prev)}
+          className="rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-bold uppercase tracking-[0.16em] text-white transition hover:border-cyan-500/30 hover:bg-cyan-500/10"
+        >
+          {showSmartAdvanced ? "Hide Advanced" : "Advanced Options"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (selectedSmartMember) {
+              loadSmartMembershipFromUser(selectedSmartMember);
+              setSuccessMessage("");
+              setError("");
+            }
+          }}
+          className="h-14 rounded-2xl border border-white/10 bg-white/5 px-5 text-sm font-bold uppercase tracking-[0.16em] text-white transition hover:border-cyan-500/30 hover:bg-cyan-500/10"
+        >
+          Reload
+        </button>
+      </div>
+    </div>
+
+    {showSmartAdvanced && (
+      <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+          Advanced Overrides
+        </p>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          <input
+            type="number"
+            placeholder="Total Days"
+            value={smartMembershipOverrides.totalDays}
+            onChange={(e) =>
+              setSmartMembershipOverrides((prev) => ({
+                ...prev,
+                totalDays: e.target.value,
+              }))
+            }
+            className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+          />
+
+          <input
+            type="number"
+            placeholder="Remaining Days"
+            value={smartMembershipOverrides.remainingDays}
+            onChange={(e) =>
+              setSmartMembershipOverrides((prev) => ({
+                ...prev,
+                remainingDays: e.target.value,
+              }))
+            }
+            className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+          />
+
+          <input
+            type="date"
+            value={smartMembershipOverrides.membershipEndDate}
+            onChange={(e) =>
+              setSmartMembershipOverrides((prev) => ({
+                ...prev,
+                membershipEndDate: e.target.value,
+              }))
+            }
+            className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
+          />
+        </div>
+      </div>
+    )}
+  </div>
+</div>
+              
 
               <div
                 ref={setSectionRef("manual-payment")}
