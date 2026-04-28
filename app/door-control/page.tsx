@@ -61,6 +61,22 @@ type DoorLiveState = {
 const TOKEN_KEY = "gym_ravana_door_admin_token";
 const USER_KEY = "gym_ravana_door_admin_user";
 
+const prettyState = (state?: string) => {
+  if (!state) return "Unknown";
+
+  const map: Record<string, string> = {
+    LOCKED: "Locked",
+    UNLOCK_PENDING: "Unlock Pending",
+    UNLOCKED_WAITING_FOR_FIRST_OPEN: "Unlocked",
+    DOOR_OPEN: "Door Open",
+    WAITING_TO_RELOCK: "Relocking Soon",
+    HARDWARE_OFFLINE: "Hardware Offline",
+    STATE_UNKNOWN: "State Unknown",
+  };
+
+  return map[state] || state.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 const getButtonTheme = (color?: string) => {
   if (color === "green") {
     return {
@@ -69,6 +85,7 @@ const getButtonTheme = (color?: string) => {
       dot: "bg-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.9)]",
       label: "UNLOCKED",
       ring: "border-emerald-400/35",
+      text: "Door is active",
     };
   }
 
@@ -79,16 +96,18 @@ const getButtonTheme = (color?: string) => {
       dot: "bg-orange-400 shadow-[0_0_22px_rgba(251,146,60,0.9)]",
       label: "PENDING",
       ring: "border-orange-400/35",
+      text: "Waiting for ESP32",
     };
   }
 
   if (color === "gray") {
     return {
       button:
-        "border-zinc-400/30 bg-zinc-700 shadow-[0_0_55px_rgba(113,113,122,0.25)]",
+        "border-zinc-500/30 bg-zinc-700 shadow-[0_0_55px_rgba(113,113,122,0.18)]",
       dot: "bg-zinc-400 shadow-[0_0_14px_rgba(161,161,170,0.6)]",
       label: "OFFLINE",
       ring: "border-zinc-500/25",
+      text: "Hardware offline",
     };
   }
 
@@ -96,8 +115,9 @@ const getButtonTheme = (color?: string) => {
     button:
       "border-red-400/40 bg-red-600 shadow-[0_0_80px_rgba(220,38,38,0.45)]",
     dot: "bg-red-400 shadow-[0_0_22px_rgba(248,113,113,0.9)]",
-    label: "LOCKED",
+    label: "UNLOCK DOOR",
     ring: "border-red-500/35",
+    text: "Ready to unlock",
   };
 };
 
@@ -136,6 +156,10 @@ export default function DoorControlPage() {
 
   const isAdmin = user?.role === "admin";
   const buttonTheme = getButtonTheme(doorState?.color);
+
+  const hardwareOnline = doorState?.hardwareOnline === true;
+  const isOffline = doorState?.color === "gray" || hardwareOnline === false;
+  const unlockDisabled = unlocking || isOffline;
 
   const saveSession = (nextToken: string, nextUser: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, nextToken);
@@ -313,6 +337,12 @@ export default function DoorControlPage() {
       return;
     }
 
+    if (isOffline) {
+      setError("Hardware is offline. Unlock is disabled until ESP32 is online.");
+      setStatus("Hardware offline.");
+      return;
+    }
+
     const confirmed = window.confirm("Unlock Gym Ravana main door now?");
 
     if (!confirmed) return;
@@ -374,8 +404,27 @@ export default function DoorControlPage() {
 
   return (
     <main className="min-h-screen bg-black text-white">
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 py-6">
-        <header className="pt-4 text-center">
+      {(status || error) && (
+        <div className="fixed left-0 right-0 top-4 z-50 mx-auto w-[92%] max-w-md">
+          <div
+            className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
+              error
+                ? "border-red-500/30 bg-red-950/80 text-red-100"
+                : "border-white/10 bg-zinc-950/85 text-white"
+            }`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/45">
+              Status
+            </p>
+            <p className="mt-1 text-sm font-bold">
+              {error || status}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-6 pt-20">
+        <header className="pt-2 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600 shadow-lg shadow-red-900/40">
             <span className="text-3xl font-black">R</span>
           </div>
@@ -456,7 +505,7 @@ export default function DoorControlPage() {
                     className={`ml-auto h-3 w-3 rounded-full ${buttonTheme.dot}`}
                   />
                   <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
-                    {refreshingState ? "Syncing" : "Live"}
+                    {refreshingState ? "Syncing" : hardwareOnline ? "Online" : "Offline"}
                   </p>
                 </div>
               </div>
@@ -467,33 +516,29 @@ export default function DoorControlPage() {
                 Door State
               </p>
 
-              <div className="mt-4 flex items-center gap-3">
-                <span className={`h-4 w-4 rounded-full ${buttonTheme.dot}`} />
-                <div>
-                  <h3 className="text-2xl font-black">
-                    {doorState?.state || "UNKNOWN"}
-                  </h3>
-                  <p className="mt-1 text-sm text-white/55">
-                    {doorState?.message || "Waiting for live door state..."}
-                  </p>
-                </div>
-              </div>
+              <h3 className="mt-4 text-4xl font-black leading-tight">
+                {prettyState(doorState?.state)}
+              </h3>
 
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+              <p className="mt-3 text-base leading-relaxed text-white/55">
+                {doorState?.message || "Waiting for live door state..."}
+              </p>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">
                     Hardware
                   </p>
-                  <p className="mt-1 text-sm font-black">
-                    {doorState?.hardwareOnline ? "Online" : "Offline"}
+                  <p className="mt-2 text-lg font-black">
+                    {hardwareOnline ? "Online" : "Offline"}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
                   <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">
                     Reed
                   </p>
-                  <p className="mt-1 text-sm font-black">
+                  <p className="mt-2 text-lg font-black">
                     {doorState?.device?.doorClosed
                       ? "Closed"
                       : doorState?.device?.doorOpen
@@ -505,15 +550,13 @@ export default function DoorControlPage() {
             </div>
 
             <div className="my-8 flex flex-1 items-center justify-center">
-              <div
-                className={`rounded-full border p-3 ${buttonTheme.ring}`}
-              >
+              <div className={`rounded-full border p-3 ${buttonTheme.ring}`}>
                 <button
                   onClick={handleUnlockDoor}
-                  disabled={unlocking}
+                  disabled={unlockDisabled}
                   className={`flex h-56 w-56 items-center justify-center rounded-full border text-center text-2xl font-black uppercase leading-tight tracking-wide text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${buttonTheme.button}`}
                 >
-                  {unlocking ? "Sending..." : buttonTheme.label === "LOCKED" ? "Unlock Door" : buttonTheme.label}
+                  {unlocking ? "SENDING..." : buttonTheme.label}
                 </button>
               </div>
             </div>
@@ -544,19 +587,6 @@ export default function DoorControlPage() {
             </button>
           </section>
         )}
-
-        <section className="mt-5 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
-          <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/35">
-            Status
-          </p>
-          <p className="mt-2 text-sm text-white/75">{status}</p>
-
-          {error ? (
-            <p className="mt-3 rounded-2xl border border-red-500/30 bg-red-500/10 p-3 text-sm font-semibold text-red-200">
-              {error}
-            </p>
-          ) : null}
-        </section>
 
         <footer className="py-5 text-center text-xs text-white/35">
           Admin-only remote door control
