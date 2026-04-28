@@ -154,6 +154,28 @@ export default function DoorControlPage() {
   const [status, setStatus] = useState("Checking admin session...");
   const [error, setError] = useState("");
 
+  const [toast, setToast] = useState<{
+  message: string;
+  type: "success" | "error" | "warning";
+} | null>(null);
+
+const showTopMessage = useCallback(
+  (message: string, type: "success" | "error" | "warning" = "warning") => {
+    setToast({ message, type });
+  },
+  []
+);
+
+useEffect(() => {
+  if (!toast) return;
+
+  const timer = window.setTimeout(() => {
+    setToast(null);
+  }, 3500);
+
+  return () => window.clearTimeout(timer);
+}, [toast]);
+
   const isAdmin = user?.role === "admin";
   const buttonTheme = getButtonTheme(doorState?.color);
 
@@ -261,6 +283,7 @@ export default function DoorControlPage() {
 
         saveSession(savedToken, finalUser);
         setStatus("Admin ready.");
+        showTopMessage("Admin login successful ✅", "success");
         await fetchDoorState(savedToken);
       } catch {
         clearSession();
@@ -324,8 +347,10 @@ export default function DoorControlPage() {
       await fetchDoorState(data.token);
     } catch (err: any) {
       clearSession();
-      setError(err?.message || "Login failed.");
-      setStatus("Login required.");
+const message = err?.message || "Login failed.";
+setError(message);
+setStatus("Login required.");
+showTopMessage(message, "error");
     } finally {
       setLoggingIn(false);
     }
@@ -338,9 +363,11 @@ export default function DoorControlPage() {
     }
 
     if (isOffline) {
-      setError("Hardware is offline. Unlock is disabled until ESP32 is online.");
-      setStatus("Hardware offline.");
-      return;
+const message = "Hardware is offline. Unlock is disabled until ESP32 is online.";
+setError(message);
+setStatus("Hardware offline.");
+showTopMessage(message, "error");
+return;
     }
 
     const confirmed = window.confirm("Unlock Gym Ravana main door now?");
@@ -371,6 +398,7 @@ export default function DoorControlPage() {
       }
 
       setStatus("Unlock command sent ✅");
+      showTopMessage("Unlock command sent ✅", "success");
       setDoorState((prev) => ({
         ...(prev || {}),
         state: "UNLOCK_PENDING",
@@ -383,8 +411,10 @@ export default function DoorControlPage() {
         fetchDoorState();
       }, 700);
     } catch (err: any) {
-      setError(err?.message || "Door unlock failed.");
-      setStatus("Unlock failed.");
+const message = err?.message || "Door unlock failed.";
+setError(message);
+setStatus("Unlock failed.");
+showTopMessage(message, "error");
     } finally {
       setUnlocking(false);
     }
@@ -404,24 +434,31 @@ export default function DoorControlPage() {
 
   return (
     <main className="min-h-screen bg-black text-white">
-      {(status || error) && (
-        <div className="fixed left-0 right-0 top-4 z-50 mx-auto w-[92%] max-w-md">
-          <div
-            className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
-              error
-                ? "border-red-500/30 bg-red-950/80 text-red-100"
-                : "border-white/10 bg-zinc-950/85 text-white"
-            }`}
-          >
-            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/45">
-              Status
-            </p>
-            <p className="mt-1 text-sm font-bold">
-              {error || status}
-            </p>
-          </div>
-        </div>
-      )}
+{toast && (
+  <div className="fixed left-0 right-0 top-4 z-50 mx-auto w-[92%] max-w-md animate-in slide-in-from-top-4 fade-in duration-300">
+    <div
+      className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
+        toast.type === "success"
+          ? "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+          : toast.type === "error"
+          ? "border-red-500/40 bg-red-950/95 text-red-100"
+          : "border-orange-400/30 bg-orange-950/90 text-orange-100"
+      }`}
+    >
+      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/55">
+        {toast.type === "success"
+          ? "Success"
+          : toast.type === "error"
+          ? "Warning"
+          : "Notice"}
+      </p>
+
+      <p className="mt-1 text-sm font-black leading-relaxed">
+        {toast.message}
+      </p>
+    </div>
+  </div>
+)}
 
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-6 pt-20">
         <header className="pt-2 text-center">
@@ -580,6 +617,7 @@ export default function DoorControlPage() {
               onClick={() => {
                 clearSession();
                 setStatus("Logged out.");
+                showTopMessage("Logged out.", "warning");
               }}
               className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-bold text-white/70"
             >
