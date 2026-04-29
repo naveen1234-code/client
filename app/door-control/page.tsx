@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type AuthUser = {
   id?: string;
@@ -17,119 +17,10 @@ type LoginResponse = {
   user?: AuthUser;
 };
 
-type DoorLiveState = {
-  success?: boolean;
-  state?: string;
-  color?: "red" | "green" | "orange" | "gray" | string;
-  isUnlocked?: boolean;
-  hardwareOnline?: boolean;
-  message?: string;
-  device?: {
-    deviceId?: string;
-    ip?: string;
-    state?: string;
-    doorClosed?: boolean;
-    doorOpen?: boolean;
-    sessionId?: string;
-    userName?: string;
-    accessPoint?: string;
-    lastHeartbeatAt?: string;
-  } | null;
-  session?: {
-    id?: string;
-    action?: string;
-    userName?: string;
-    accessPoint?: string;
-    doorOpened?: boolean;
-    doorClosed?: boolean;
-    completed?: boolean;
-    createdAt?: string;
-    openedAt?: string;
-    closedAt?: string;
-    completedAt?: string;
-  } | null;
-  command?: {
-    id?: string;
-    status?: string;
-    action?: string;
-    createdAt?: string;
-    claimedAt?: string;
-    completedAt?: string;
-  } | null;
-};
+type ToastType = "success" | "error" | "warning";
 
 const TOKEN_KEY = "gym_ravana_door_admin_token";
 const USER_KEY = "gym_ravana_door_admin_user";
-
-const prettyState = (state?: string) => {
-  if (!state) return "Unknown";
-
-  const map: Record<string, string> = {
-    LOCKED: "Locked",
-    UNLOCK_PENDING: "Unlock Pending",
-    UNLOCKED_WAITING_FOR_FIRST_OPEN: "Unlocked",
-    DOOR_OPEN: "Door Open",
-    WAITING_TO_RELOCK: "Relocking Soon",
-    HARDWARE_OFFLINE: "Hardware Offline",
-    STATE_UNKNOWN: "State Unknown",
-  };
-
-  return map[state] || state.replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-};
-
-const getButtonTheme = (color?: string) => {
-  if (color === "green") {
-    return {
-      button:
-        "border-emerald-300/50 bg-emerald-500 shadow-[0_0_80px_rgba(16,185,129,0.45)]",
-      dot: "bg-emerald-400 shadow-[0_0_22px_rgba(52,211,153,0.9)]",
-      label: "UNLOCKED",
-      ring: "border-emerald-400/35",
-      text: "Door is active",
-    };
-  }
-
-  if (color === "orange") {
-    return {
-      button:
-        "border-orange-300/50 bg-orange-500 shadow-[0_0_80px_rgba(249,115,22,0.45)]",
-      dot: "bg-orange-400 shadow-[0_0_22px_rgba(251,146,60,0.9)]",
-      label: "PENDING",
-      ring: "border-orange-400/35",
-      text: "Waiting for ESP32",
-    };
-  }
-
-  if (color === "gray") {
-    return {
-      button:
-        "border-zinc-500/30 bg-zinc-700 shadow-[0_0_55px_rgba(113,113,122,0.18)]",
-      dot: "bg-zinc-400 shadow-[0_0_14px_rgba(161,161,170,0.6)]",
-      label: "OFFLINE",
-      ring: "border-zinc-500/25",
-      text: "Hardware offline",
-    };
-  }
-
-  return {
-    button:
-      "border-red-400/40 bg-red-600 shadow-[0_0_80px_rgba(220,38,38,0.45)]",
-    dot: "bg-red-400 shadow-[0_0_22px_rgba(248,113,113,0.9)]",
-    label: "UNLOCK DOOR",
-    ring: "border-red-500/35",
-    text: "Ready to unlock",
-  };
-};
-
-const formatTime = (value?: string) => {
-  if (!value) return "Not available";
-
-  try {
-    return new Date(value).toLocaleString();
-  } catch {
-    return "Not available";
-  }
-};
 
 export default function DoorControlPage() {
   const apiBase = useMemo(() => {
@@ -139,7 +30,7 @@ export default function DoorControlPage() {
     ).replace(/\/$/, "");
   }, []);
 
-  const [token, setToken] = useState<string>("");
+  const [token, setToken] = useState("");
   const [user, setUser] = useState<AuthUser | null>(null);
 
   const [email, setEmail] = useState("");
@@ -148,40 +39,27 @@ export default function DoorControlPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loggingIn, setLoggingIn] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
-  const [refreshingState, setRefreshingState] = useState(false);
-
-  const [doorState, setDoorState] = useState<DoorLiveState | null>(null);
-  const [status, setStatus] = useState("Checking admin session...");
-  const [error, setError] = useState("");
 
   const [toast, setToast] = useState<{
-  message: string;
-  type: "success" | "error" | "warning";
-} | null>(null);
-
-const showTopMessage = useCallback(
-  (message: string, type: "success" | "error" | "warning" = "warning") => {
-    setToast({ message, type });
-  },
-  []
-);
-
-useEffect(() => {
-  if (!toast) return;
-
-  const timer = window.setTimeout(() => {
-    setToast(null);
-  }, 3500);
-
-  return () => window.clearTimeout(timer);
-}, [toast]);
+    message: string;
+    type: ToastType;
+  } | null>(null);
 
   const isAdmin = user?.role === "admin";
-  const buttonTheme = getButtonTheme(doorState?.color);
 
-  const hardwareOnline = doorState?.hardwareOnline === true;
-  const isOffline = doorState?.color === "gray" || hardwareOnline === false;
-  const unlockDisabled = unlocking || isOffline;
+  const showTopMessage = (message: string, type: ToastType = "warning") => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (!toast) return;
+
+    const timer = window.setTimeout(() => {
+      setToast(null);
+    }, 3500);
+
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const saveSession = (nextToken: string, nextUser: AuthUser) => {
     localStorage.setItem(TOKEN_KEY, nextToken);
@@ -195,61 +73,18 @@ useEffect(() => {
     localStorage.removeItem(USER_KEY);
     setToken("");
     setUser(null);
-    setDoorState(null);
   };
 
   const getDisplayName = () => {
     return user?.fullName || user?.name || user?.email || "Admin";
   };
 
-  const fetchDoorState = useCallback(
-    async (activeToken?: string) => {
-      const tokenToUse = activeToken || token;
-
-      if (!tokenToUse) return;
-
-      try {
-        setRefreshingState(true);
-
-        const response = await fetch(`${apiBase}/api/access/device/live-state`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${tokenToUse}`,
-          },
-          cache: "no-store",
-        });
-
-        const data: DoorLiveState = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.message || "Failed to fetch door state.");
-        }
-
-        setDoorState(data);
-      } catch (err: any) {
-        setDoorState({
-          success: false,
-          state: "STATE_UNKNOWN",
-          color: "gray",
-          isUnlocked: false,
-          hardwareOnline: false,
-          message: err?.message || "Door live state unavailable.",
-        });
-      } finally {
-        setRefreshingState(false);
-      }
-    },
-    [apiBase, token]
-  );
-
   useEffect(() => {
     const checkSavedSession = async () => {
       try {
         const savedToken = localStorage.getItem(TOKEN_KEY);
-        const savedUserRaw = localStorage.getItem(USER_KEY);
 
         if (!savedToken) {
-          setStatus("Please login as admin.");
           return;
         }
 
@@ -262,7 +97,6 @@ useEffect(() => {
 
         if (!response.ok) {
           clearSession();
-          setStatus("Session expired. Please login again.");
           return;
         }
 
@@ -270,54 +104,31 @@ useEffect(() => {
 
         if (currentUser?.role !== "admin") {
           clearSession();
-          setError("Only admins can use door control.");
-          setStatus("Admin access required.");
+          showTopMessage("Only admins can use door control.", "error");
           return;
         }
 
-        let finalUser = currentUser;
-
-        if (!finalUser && savedUserRaw) {
-          finalUser = JSON.parse(savedUserRaw);
-        }
-
-        saveSession(savedToken, finalUser);
-        setStatus("Admin ready.");
-        showTopMessage("Admin login successful ✅", "success");
-        await fetchDoorState(savedToken);
+        saveSession(savedToken, currentUser);
       } catch {
         clearSession();
-        setStatus("Please login as admin.");
       } finally {
         setCheckingSession(false);
       }
     };
 
     checkSavedSession();
-  }, [apiBase, fetchDoorState]);
-
-  useEffect(() => {
-    if (!token || !isAdmin) return;
-
-    const interval = window.setInterval(() => {
-      fetchDoorState();
-    }, 1000);
-
-    return () => window.clearInterval(interval);
-  }, [fetchDoorState, isAdmin, token]);
+  }, [apiBase]);
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!email.trim() || !password.trim()) {
-      setError("Email and password are required.");
+      showTopMessage("Email and password are required.", "error");
       return;
     }
 
     try {
       setLoggingIn(true);
-      setError("");
-      setStatus("Logging in...");
 
       const response = await fetch(`${apiBase}/api/auth/login`, {
         method: "POST",
@@ -341,16 +152,12 @@ useEffect(() => {
       }
 
       saveSession(data.token, data.user);
-      setStatus("Admin ready.");
       setEmail("");
       setPassword("");
-      await fetchDoorState(data.token);
+      showTopMessage("Admin login successful ✅", "success");
     } catch (err: any) {
       clearSession();
-const message = err?.message || "Login failed.";
-setError(message);
-setStatus("Login required.");
-showTopMessage(message, "error");
+      showTopMessage(err?.message || "Login failed.", "error");
     } finally {
       setLoggingIn(false);
     }
@@ -358,16 +165,8 @@ showTopMessage(message, "error");
 
   const handleUnlockDoor = async () => {
     if (!token) {
-      setError("Please login first.");
+      showTopMessage("Please login first.", "error");
       return;
-    }
-
-    if (isOffline) {
-const message = "Hardware is offline. Unlock is disabled until ESP32 is online.";
-setError(message);
-setStatus("Hardware offline.");
-showTopMessage(message, "error");
-return;
     }
 
     const confirmed = window.confirm("Unlock Gym Ravana main door now?");
@@ -376,8 +175,6 @@ return;
 
     try {
       setUnlocking(true);
-      setError("");
-      setStatus("Sending unlock command...");
 
       const response = await fetch(`${apiBase}/api/access/device/manual-unlock`, {
         method: "POST",
@@ -397,24 +194,9 @@ return;
         throw new Error(data.message || "Door unlock failed.");
       }
 
-      setStatus("Unlock command sent ✅");
       showTopMessage("Unlock command sent ✅", "success");
-      setDoorState((prev) => ({
-        ...(prev || {}),
-        state: "UNLOCK_PENDING",
-        color: "orange",
-        isUnlocked: false,
-        message: "Unlock command sent. Waiting for ESP32.",
-      }));
-
-      setTimeout(() => {
-        fetchDoorState();
-      }, 700);
     } catch (err: any) {
-const message = err?.message || "Door unlock failed.";
-setError(message);
-setStatus("Unlock failed.");
-showTopMessage(message, "error");
+      showTopMessage(err?.message || "Door unlock failed.", "error");
     } finally {
       setUnlocking(false);
     }
@@ -422,11 +204,14 @@ showTopMessage(message, "error");
 
   if (checkingSession) {
     return (
-      <main className="min-h-screen bg-black text-white flex items-center justify-center px-5">
+      <main className="flex min-h-screen items-center justify-center bg-black px-5 text-white">
         <section className="w-full max-w-md rounded-[2rem] border border-white/10 bg-white/[0.04] p-8 text-center shadow-2xl">
-          <div className="mx-auto mb-5 h-16 w-16 rounded-2xl bg-red-600 shadow-lg shadow-red-900/40" />
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600 shadow-lg shadow-red-900/40">
+            <span className="text-3xl font-black">R</span>
+          </div>
+
           <h1 className="text-2xl font-black tracking-tight">GYM RAVANA</h1>
-          <p className="mt-3 text-sm text-white/60">{status}</p>
+          <p className="mt-3 text-sm text-white/60">Checking admin session...</p>
         </section>
       </main>
     );
@@ -434,34 +219,34 @@ showTopMessage(message, "error");
 
   return (
     <main className="min-h-screen bg-black text-white">
-{toast && (
-  <div className="fixed left-0 right-0 top-4 z-50 mx-auto w-[92%] max-w-md animate-in slide-in-from-top-4 fade-in duration-300">
-    <div
-      className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
-        toast.type === "success"
-          ? "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
-          : toast.type === "error"
-          ? "border-red-500/40 bg-red-950/95 text-red-100"
-          : "border-orange-400/30 bg-orange-950/90 text-orange-100"
-      }`}
-    >
-      <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/55">
-        {toast.type === "success"
-          ? "Success"
-          : toast.type === "error"
-          ? "Warning"
-          : "Notice"}
-      </p>
+      {toast && (
+        <div className="fixed left-0 right-0 top-4 z-50 mx-auto w-[92%] max-w-md">
+          <div
+            className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
+              toast.type === "success"
+                ? "border-emerald-400/30 bg-emerald-950/90 text-emerald-100"
+                : toast.type === "error"
+                ? "border-red-500/40 bg-red-950/95 text-red-100"
+                : "border-orange-400/30 bg-orange-950/90 text-orange-100"
+            }`}
+          >
+            <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/55">
+              {toast.type === "success"
+                ? "Success"
+                : toast.type === "error"
+                ? "Warning"
+                : "Notice"}
+            </p>
 
-      <p className="mt-1 text-sm font-black leading-relaxed">
-        {toast.message}
-      </p>
-    </div>
-  </div>
-)}
+            <p className="mt-1 text-sm font-black leading-relaxed">
+              {toast.message}
+            </p>
+          </div>
+        </div>
+      )}
 
-      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-6 pt-20">
-        <header className="pt-2 text-center">
+      <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-6 pt-10">
+        <header className="pt-4 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-red-600 shadow-lg shadow-red-900/40">
             <span className="text-3xl font-black">R</span>
           </div>
@@ -475,15 +260,16 @@ showTopMessage(message, "error");
           </h1>
 
           <p className="mt-2 text-sm text-white/55">
-            Secure admin-only remote unlock app
+            Admin-only remote unlock app
           </p>
         </header>
 
         {!isAdmin ? (
           <section className="mt-8 rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
             <h2 className="text-xl font-black">Admin Login</h2>
+
             <p className="mt-2 text-sm text-white/55">
-              Login once. The app will keep your admin session saved on this phone.
+              Login once. Your admin session will stay saved on this phone.
             </p>
 
             <form onSubmit={handleLogin} className="mt-6 space-y-4">
@@ -491,6 +277,7 @@ showTopMessage(message, "error");
                 <span className="mb-2 block text-sm font-semibold text-white/75">
                   Email
                 </span>
+
                 <input
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -506,6 +293,7 @@ showTopMessage(message, "error");
                 <span className="mb-2 block text-sm font-semibold text-white/75">
                   Password
                 </span>
+
                 <input
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
@@ -528,98 +316,30 @@ showTopMessage(message, "error");
         ) : (
           <section className="mt-8 flex flex-1 flex-col rounded-[2rem] border border-white/10 bg-white/[0.04] p-5 shadow-2xl">
             <div className="rounded-3xl border border-white/10 bg-black/50 p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/40">
-                    Logged in as
-                  </p>
-                  <h2 className="mt-2 text-xl font-black">{getDisplayName()}</h2>
-                  <p className="mt-1 text-sm text-white/50">{user?.email}</p>
-                </div>
-
-                <div className="text-right">
-                  <div
-                    className={`ml-auto h-3 w-3 rounded-full ${buttonTheme.dot}`}
-                  />
-                  <p className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
-                    {refreshingState ? "Syncing" : hardwareOnline ? "Online" : "Offline"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-5 rounded-3xl border border-white/10 bg-black/50 p-5">
               <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/40">
-                Door State
+                Logged in as
               </p>
 
-              <h3 className="mt-4 text-4xl font-black leading-tight">
-                {prettyState(doorState?.state)}
-              </h3>
-
-              <p className="mt-3 text-base leading-relaxed text-white/55">
-                {doorState?.message || "Waiting for live door state..."}
-              </p>
-
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">
-                    Hardware
-                  </p>
-                  <p className="mt-2 text-lg font-black">
-                    {hardwareOnline ? "Online" : "Offline"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/35">
-                    Reed
-                  </p>
-                  <p className="mt-2 text-lg font-black">
-                    {doorState?.device?.doorClosed
-                      ? "Closed"
-                      : doorState?.device?.doorOpen
-                      ? "Open"
-                      : "Unknown"}
-                  </p>
-                </div>
-              </div>
+              <h2 className="mt-2 text-xl font-black">{getDisplayName()}</h2>
+              <p className="mt-1 text-sm text-white/50">{user?.email}</p>
             </div>
 
-            <div className="my-8 flex flex-1 items-center justify-center">
-              <div className={`rounded-full border p-3 ${buttonTheme.ring}`}>
-                <button
-                  onClick={handleUnlockDoor}
-                  disabled={unlockDisabled}
-                  className={`flex h-56 w-56 items-center justify-center rounded-full border text-center text-2xl font-black uppercase leading-tight tracking-wide text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60 ${buttonTheme.button}`}
-                >
-                  {unlocking ? "SENDING..." : buttonTheme.label}
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-white/10 bg-black/40 p-4">
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-white/35">
-                Last Hardware Signal
-              </p>
-              <p className="mt-2 text-sm text-white/65">
-                {formatTime(doorState?.device?.lastHeartbeatAt)}
-              </p>
-
-              {doorState?.device?.ip ? (
-                <p className="mt-1 text-xs text-white/35">
-                  IP: {doorState.device.ip}
-                </p>
-              ) : null}
+            <div className="my-10 flex flex-1 items-center justify-center">
+              <button
+                onClick={handleUnlockDoor}
+                disabled={unlocking}
+                className="flex h-64 w-64 items-center justify-center rounded-full border border-red-400/40 bg-red-600 text-center text-3xl font-black uppercase leading-tight tracking-wide text-white shadow-[0_0_80px_rgba(220,38,38,0.45)] transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {unlocking ? "Sending..." : "Unlock Door"}
+              </button>
             </div>
 
             <button
               onClick={() => {
                 clearSession();
-                setStatus("Logged out.");
                 showTopMessage("Logged out.", "warning");
               }}
-              className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-bold text-white/70"
+              className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-bold text-white/70"
             >
               Logout
             </button>
@@ -627,7 +347,7 @@ showTopMessage(message, "error");
         )}
 
         <footer className="py-5 text-center text-xs text-white/35">
-          Admin-only remote door control
+          Remote door unlock only
         </footer>
       </div>
     </main>
