@@ -597,8 +597,8 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
                 </p>
                 <p className="mt-3 text-sm leading-7 text-gray-300">
                   {mode === "entry"
-                    ? "Entry only works with an active membership, correct ENTRY QR, and if you are not already inside. A valid entry records attendance and reduces one remaining day."
-                    : "Exit only works with the correct EXIT QR and only if you are currently marked as inside the gym."}
+  ? "Entry only works with an active membership, correct ENTRY QR, and if you are not already inside. A valid entry records attendance and reduces one remaining day only once per day."
+  : "Exit only works with the correct EXIT QR and only if you are currently marked as inside the gym."}
                 </p>
               </div>
             </aside>

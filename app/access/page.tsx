@@ -81,67 +81,62 @@ export default function AccessPage() {
   }, []);
 
   const detectInstallGuide = () => {
-    const ua = navigator.userAgent.toLowerCase();
+  const ua = navigator.userAgent.toLowerCase();
 
-    const isIOS =
-      /iphone|ipad|ipod/.test(ua) ||
-      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isIOS =
+    /iphone|ipad|ipod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-    const isSafari =
-      /safari/.test(ua) &&
-      !/chrome|crios|android|edg|opr|opera/.test(ua);
+  const isSafari =
+    /safari/.test(ua) &&
+    !/chrome|crios|android|edg|opr|opera/.test(ua);
 
-    const isAndroid = /android/.test(ua);
-    const isChrome = /chrome|crios/.test(ua) && !/edg|opr|opera/.test(ua);
-    const isSamsung = /samsungbrowser/.test(ua);
+  const isAndroid = /android/.test(ua);
+  const isSamsung = /samsungbrowser/.test(ua);
 
-    if (isIOS && isSafari) {
-      return {
-        title: "Install on iPhone / Safari",
-        steps: [
-          "Tap the Share button in Safari.",
-          "Scroll down and tap Add to Home Screen.",
-          "Tap Add to install the Gym Ravana Access App.",
-        ],
-      };
-    }
-
-{showInstallHelp && (
-  <div className="mt-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-200">
-    <p className="font-semibold text-white">Install not showing automatically?</p>
-    <p className="mt-2 leading-7">
-      On Android: open browser menu <span className="font-bold text-white">⋮</span> and tap{" "}
-      <span className="font-bold text-white">Install App</span> or{" "}
-      <span className="font-bold text-white">Add to Home Screen</span>.
-    </p>
-    <p className="mt-2 leading-7">
-      On iPhone Safari: tap <span className="font-bold text-white">Share</span> and choose{" "}
-      <span className="font-bold text-white">Add to Home Screen</span>.
-    </p>
-  </div>
-)}
-
-    if (isAndroid && isSamsung) {
-      return {
-        title: "Install on Samsung Internet",
-        steps: [
-          "Tap the browser menu.",
-          "Tap Add page to.",
-          "Choose Home screen.",
-          "Tap Add to install the Gym Ravana Access App.",
-        ],
-      };
-    }
-
+  if (isIOS && isSafari) {
     return {
-      title: "Install Access App",
+      title: "Install on iPhone / Safari",
       steps: [
-        "Open your browser menu.",
-        "Choose Install App or Add to Home Screen.",
-        "Confirm to place Gym Ravana Access App on your phone.",
+        "Tap the Share button in Safari.",
+        "Scroll down and tap Add to Home Screen.",
+        "Tap Add to install the Gym Ravana Access App.",
       ],
     };
+  }
+
+  if (isAndroid && isSamsung) {
+    return {
+      title: "Install on Samsung Internet",
+      steps: [
+        "Tap the browser menu.",
+        "Tap Add page to.",
+        "Choose Home screen.",
+        "Tap Add to install the Gym Ravana Access App.",
+      ],
+    };
+  }
+
+  if (isAndroid) {
+    return {
+      title: "Install on Android",
+      steps: [
+        "Open the browser menu.",
+        "Tap Install App or Add to Home Screen.",
+        "Confirm to install the Gym Ravana Access App.",
+      ],
+    };
+  }
+
+  return {
+    title: "Install Access App",
+    steps: [
+      "Open your browser menu.",
+      "Choose Install App or Add to Home Screen.",
+      "Confirm to place Gym Ravana Access App on your phone.",
+    ],
   };
+};
 
   const handleInstallApp = async () => {
     if (installPrompt) {
