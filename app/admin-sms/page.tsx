@@ -23,6 +23,7 @@ export default function AdminSmsPage() {
 
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [retryingFailed, setRetryingFailed] = useState(false);
   const [message, setMessage] = useState("");
   const [confirmSend, setConfirmSend] = useState(false);
   const [error, setError] = useState("");
@@ -137,6 +138,69 @@ export default function AdminSmsPage() {
       setSending(false);
     }
   };
+
+  const handleRetryFailedSms = async () => {
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    router.push("/login");
+    return;
+  }
+
+  if (!result?.failedMembers || result.failedMembers.length === 0) {
+    setError("No failed members to retry.");
+    return;
+  }
+
+  if (!message.trim() || message.trim().length < 5) {
+    setError("Message is missing. Please keep the same message before retrying.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Retry SMS only for ${result.failedMembers.length} failed members?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    setRetryingFailed(true);
+    setError("");
+    setSuccessMessage("");
+
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/auth/retry-failed-member-sms`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message: message.trim(),
+          confirm: true,
+          memberIds: result.failedMembers.map((item) => item.id),
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.message || "Failed to retry failed SMS.");
+      return;
+    }
+
+    setResult(data);
+    setSuccessMessage(
+      `Retry completed ✅ Sent: ${data.sent} / Failed: ${data.failed}`
+    );
+  } catch {
+    setError("Something went wrong while retrying failed SMS.");
+  } finally {
+    setRetryingFailed(false);
+  }
+};
 
   if (loading) {
     return (
@@ -284,19 +348,34 @@ export default function AdminSmsPage() {
                 </div>
               </div>
 
-              {result.failedMembers && result.failedMembers.length > 0 && (
-                <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
-                  <p className="text-sm font-bold text-red-200">Failed members:</p>
+{result.failedMembers && result.failedMembers.length > 0 && (
+  <div className="mt-6 rounded-2xl border border-red-500/20 bg-red-500/10 p-4">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="text-sm font-bold text-red-200">Failed members:</p>
 
-                  <div className="mt-3 space-y-2 text-sm text-red-100">
-                    {result.failedMembers.slice(0, 10).map((item) => (
-                      <p key={`${item.id}-${item.phone}`}>
-                        {item.name} — {item.phone} — {item.reason}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
+      <button
+        type="button"
+        onClick={handleRetryFailedSms}
+        disabled={retryingFailed}
+        className={`rounded-xl px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition ${
+          retryingFailed
+            ? "cursor-not-allowed bg-red-900/40 text-red-300/60"
+            : "bg-red-600 hover:bg-red-700"
+        }`}
+      >
+        {retryingFailed ? "Retrying..." : "Send Only To Failed"}
+      </button>
+    </div>
+
+    <div className="mt-3 space-y-2 text-sm text-red-100">
+      {result.failedMembers.slice(0, 20).map((item) => (
+        <p key={`${item.id}-${item.phone}`}>
+          {item.name} — {item.phone} — {item.reason}
+        </p>
+      ))}
+    </div>
+  </div>
+)}
             </div>
           )}
         </div>
