@@ -48,6 +48,8 @@ const sectionCardClass =
 export default function RegisterPage() {
   const router = useRouter();
   const signatureRef = useRef<SignatureCanvas | null>(null);
+  const turnstileRef = useRef<HTMLDivElement | null>(null);
+const turnstileWidgetIdRef = useRef<string | null>(null);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -171,6 +173,57 @@ export default function RegisterPage() {
       ).onTurnstileError;
     };
   }, []);
+
+  useEffect(() => {
+  if (currentStep !== 4) return;
+  if (!turnstileRef.current) return;
+  if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) return;
+
+  let tries = 0;
+
+  const renderTurnstile = () => {
+    const turnstileWindow = window as typeof window & {
+      turnstile?: {
+        render: (
+          element: HTMLElement,
+          options: {
+            sitekey: string;
+            callback: string;
+            "expired-callback": string;
+            "error-callback": string;
+            theme?: "light" | "dark" | "auto";
+          }
+        ) => string;
+      };
+    };
+
+    if (!turnstileWindow.turnstile || !turnstileRef.current) {
+      tries += 1;
+
+      if (tries < 20) {
+        window.setTimeout(renderTurnstile, 300);
+      }
+
+      return;
+    }
+
+    turnstileRef.current.innerHTML = "";
+    setTurnstileToken("");
+
+    turnstileWidgetIdRef.current = turnstileWindow.turnstile.render(
+      turnstileRef.current,
+      {
+        sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "",
+        callback: "onTurnstileSuccess",
+        "expired-callback": "onTurnstileExpired",
+        "error-callback": "onTurnstileError",
+        theme: "light",
+      }
+    );
+  };
+
+  renderTurnstile();
+}, [currentStep]);
 
   useEffect(() => {
     const savedForm = sessionStorage.getItem("gymRavanaRegisterForm");
@@ -982,13 +1035,7 @@ export default function RegisterPage() {
                 </p>
 
                 <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-white p-4">
-                  <div
-                    className="cf-turnstile"
-                    data-sitekey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
-                    data-callback="onTurnstileSuccess"
-                    data-expired-callback="onTurnstileExpired"
-                    data-error-callback="onTurnstileError"
-                  />
+                  <div ref={turnstileRef} className="min-h-[70px] w-full" />
                 </div>
 
                 <p className="mt-3 text-sm leading-7 text-gray-400">
