@@ -1763,6 +1763,13 @@ const integrationStatusCards = useMemo(
   Gallery Manager
 </button>
 
+<button
+  onClick={() => router.push("/admin-sms")}
+  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/40 hover:bg-red-500/10"
+>
+  SMS Broadcast
+</button>
+
         <button
           onClick={handleLogout}
           className="rounded-2xl bg-red-600 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:scale-[1.01] hover:bg-red-700"

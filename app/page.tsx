@@ -537,7 +537,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         Personal Training
                       </p>
                       <p className="mt-3 text-2xl font-black text-red-500">
-                        LKR 5000
+                        LKR 12500
                       </p>
                       <p className="mt-1 text-sm text-gray-400">
                         Expert-guided training support
@@ -549,7 +549,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         Start Membership
                       </p>
                       <p className="mt-3 text-3xl font-black text-white">
-                        LKR 3500
+                        LKR 4500
                       </p>
                       <p className="mt-1 text-sm text-gray-300">
                         + LKR 1000 admission
@@ -662,7 +662,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                   </div>
 
                   <h3 className="mt-5 font-display text-4xl uppercase text-white">
-                    LKR 3500
+                    LKR 4500
                   </h3>
 
                   <p className="mt-2 text-sm text-gray-500">
@@ -719,7 +719,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
                   <div className="mt-4 flex items-end gap-3">
                     <h3 className="font-display text-4xl sm:text-5xl uppercase text-white md:text-6xl">
-                      LKR 6500
+                      LKR 7500
                     </h3>
                   </div>
 
@@ -794,7 +794,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                   </div>
 
                   <h3 className="mt-5 font-display text-4xl uppercase text-white">
-                    LKR 7500
+                    LKR 13700
                   </h3>
 
                   <p className="mt-5 leading-7 text-gray-400">
@@ -821,7 +821,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                   </div>
 
                   <h3 className="mt-5 font-display text-4xl uppercase text-white">
-                    LKR 9500
+                    LKR 17000
                   </h3>
 
                   <p className="mt-5 leading-7 text-gray-400">
@@ -850,7 +850,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                     Couple Plan
                   </h3>
                   <p className="mt-3 text-3xl font-bold text-red-500">
-                    LKR 15000
+                    LKR 28000
                   </p>
                   <p className="mt-2 text-sm text-gray-500">
                     1 year for two people
@@ -877,7 +877,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                     Personal Training
                   </h3>
                   <p className="mt-3 text-3xl font-bold text-white">
-                    LKR 5000
+                    LKR 12500
                   </p>
                   <p className="mt-5 leading-7 text-gray-300">
                     Expert-guided sessions for members who want accountability,
@@ -1272,7 +1272,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         Main Plan Starts
                       </p>
                       <p className="mt-3 text-2xl font-semibold text-white">
-                        LKR 3500
+                        LKR 4500
                       </p>
                       <p className="mt-1 text-sm text-gray-500">
                         + LKR 1000 admission
@@ -1284,7 +1284,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         Personal Training
                       </p>
                       <p className="mt-3 text-2xl font-semibold text-white">
-                        LKR 5000
+                        LKR 12500
                       </p>
                       <p className="mt-1 text-sm text-gray-500">
                         Expert-guided sessions

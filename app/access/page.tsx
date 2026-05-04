@@ -48,15 +48,20 @@ export default function AccessPage() {
           },
         });
 
-        const data = await res.json();
+const data = await res.json();
 
-        if (!res.ok) {
-          localStorage.removeItem("token");
-          router.push("/login");
-          return;
-        }
+if (!res.ok) {
+  if (res.status === 401 || res.status === 403) {
+    localStorage.removeItem("token");
+    router.push("/login");
+    return;
+  }
 
-        setUser(data);
+  setError("Access app could not refresh right now. Please check again in a moment.");
+  return;
+}
+
+setUser(data);
       } catch {
         setError("Failed to load access app");
       } finally {
