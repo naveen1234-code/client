@@ -174,7 +174,7 @@ const turnstileWidgetIdRef = useRef<string | null>(null);
     };
   }, []);
 
-  useEffect(() => {
+useEffect(() => {
   if (currentStep !== 4) return;
   if (!turnstileRef.current) return;
   if (!process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) return;
@@ -188,9 +188,9 @@ const turnstileWidgetIdRef = useRef<string | null>(null);
           element: HTMLElement,
           options: {
             sitekey: string;
-            callback: string;
-            "expired-callback": string;
-            "error-callback": string;
+            callback: (token: string) => void;
+            "expired-callback": () => void;
+            "error-callback": () => void;
             theme?: "light" | "dark" | "auto";
           }
         ) => string;
@@ -214,9 +214,17 @@ const turnstileWidgetIdRef = useRef<string | null>(null);
       turnstileRef.current,
       {
         sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "",
-        callback: "onTurnstileSuccess",
-        "expired-callback": "onTurnstileExpired",
-        "error-callback": "onTurnstileError",
+        callback: (token: string) => {
+          setTurnstileToken(token);
+          setError("");
+        },
+        "expired-callback": () => {
+          setTurnstileToken("");
+        },
+        "error-callback": () => {
+          setTurnstileToken("");
+          setError("Bot protection failed. Please try again.");
+        },
         theme: "light",
       }
     );
