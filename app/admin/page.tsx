@@ -172,6 +172,16 @@ const calculateRemainingDaysFromStart = (startDate: string, totalDays: number) =
   return Math.max(totalDays - usedDays, 0);
 };
 
+const getFileUrl = (url?: string) => {
+  if (!url) return "";
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+
+  return `${process.env.NEXT_PUBLIC_API_URL}${url}`;
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const currentDate = new Date();
@@ -3316,14 +3326,14 @@ const integrationStatusCards = useMemo(
                       </button>
 
                       {user.applicationPdfUrl ? (
-                        <a
-                          href={`${process.env.NEXT_PUBLIC_API_URL}${user.applicationPdfUrl}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-300 transition duration-300 hover:border-blue-400/40 hover:bg-blue-500/20 hover:text-white"
-                        >
-                          View Application PDF
-                        </a>
+<a
+  href={getFileUrl(user.applicationPdfUrl)}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="inline-flex items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 px-5 py-3 text-sm font-bold uppercase tracking-[0.18em] text-blue-300 transition duration-300 hover:border-blue-400/40 hover:bg-blue-500/20 hover:text-white"
+>
+  View Application PDF
+</a>
                       ) : (
                         <span className="inline-flex items-center rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-sm font-semibold text-gray-500">
                           No Application PDF
