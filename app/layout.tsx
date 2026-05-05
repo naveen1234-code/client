@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
+import SystemShutdownGuard from "@/components/SystemShutdownGuard";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -38,7 +39,7 @@ export default function RootLayout({
     <meta name="mobile-web-app-capable" content="yes" />
   </head>
       <body className={`${inter.variable} ${oswald.variable} font-sans bg-black text-white`}>
-  {children}
+  <SystemShutdownGuard>{children}</SystemShutdownGuard>
   <Script id="register-sw" strategy="afterInteractive">
     {`
       if ("serviceWorker" in navigator) {

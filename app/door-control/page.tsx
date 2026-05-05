@@ -19,6 +19,41 @@ type LoginResponse = {
 
 type ToastType = "success" | "error" | "warning";
 
+type DoorCommandStatusResponse = {
+  success?: boolean;
+  status?: string;
+  message?: string;
+  user?: AuthUser;
+  command?: {
+    id?: string;
+    status?: string;
+    deviceMessage?: string;
+  };
+};
+
+type DoorLiveStateResponse = {
+  success?: boolean;
+  state?: string;
+  color?: string;
+  isUnlocked?: boolean;
+  hardwareOnline?: boolean;
+  message?: string;
+  device?: {
+    deviceId?: string;
+    ip?: string;
+    state?: string;
+    doorClosed?: boolean;
+    doorOpen?: boolean;
+    lastHeartbeatAt?: string;
+  };
+  command?: {
+    id?: string;
+    status?: string;
+    action?: string;
+    deviceMessage?: string;
+  } | null;
+};
+
 const TOKEN_KEY = "gym_ravana_door_admin_token";
 const USER_KEY = "gym_ravana_door_admin_user";
 
@@ -39,6 +74,13 @@ export default function DoorControlPage() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [loggingIn, setLoggingIn] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [doorStatus, setDoorStatus] = useState<DoorLiveStateResponse | null>(
+    null
+  );
+
+  const [lastCommandId, setLastCommandId] = useState("");
+  const [lastCommandStatus, setLastCommandStatus] = useState("");
 
   const [toast, setToast] = useState<{
     message: string;
@@ -46,6 +88,23 @@ export default function DoorControlPage() {
   } | null>(null);
 
   const isAdmin = user?.role === "admin";
+
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+  const isFinalSuccessStatus = (status: string) => {
+    return ["unlocked", "completed", "restarting"].includes(status);
+  };
+
+  const isFinalFailureStatus = (status: string) => {
+    return [
+      "busy",
+      "failed",
+      "expired",
+      "rejected_door_open",
+      "rejected_unknown_action",
+    ].includes(status);
+  };
 
   const showTopMessage = (message: string, type: ToastType = "warning") => {
     setToast({ message, type });
@@ -56,7 +115,7 @@ export default function DoorControlPage() {
 
     const timer = window.setTimeout(() => {
       setToast(null);
-    }, 3500);
+    }, 4200);
 
     return () => window.clearTimeout(timer);
   }, [toast]);
@@ -73,10 +132,73 @@ export default function DoorControlPage() {
     localStorage.removeItem(USER_KEY);
     setToken("");
     setUser(null);
+    setDoorStatus(null);
+    setLastCommandId("");
+    setLastCommandStatus("");
   };
 
   const getDisplayName = () => {
     return user?.fullName || user?.name || user?.email || "Admin";
+  };
+
+  const refreshDoorStatus = async (authToken = token) => {
+    if (!authToken) return;
+
+    try {
+      const response = await fetch(`${apiBase}/api/access/device/live-state`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+
+      const data: DoorLiveStateResponse = await response.json();
+
+      if (response.ok) {
+        setDoorStatus(data);
+      }
+    } catch {
+      // Keep previous status silently.
+    }
+  };
+
+  const waitForDoorCommandResult = async (
+    commandId: string,
+    authToken: string
+  ): Promise<DoorCommandStatusResponse> => {
+    for (let attempt = 1; attempt <= 10; attempt += 1) {
+      const response = await fetch(
+        `${apiBase}/api/access/command-status/${commandId}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        }
+      );
+
+      const data: DoorCommandStatusResponse = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to check door command status.");
+      }
+
+      const status = String(data.status || "").toLowerCase();
+
+      setLastCommandStatus(status);
+
+      if (isFinalSuccessStatus(status)) {
+        return data;
+      }
+
+      if (isFinalFailureStatus(status)) {
+        throw new Error(data.message || "Door command failed.");
+      }
+
+      await sleep(900);
+    }
+
+    throw new Error("Door controller did not confirm in time.");
   };
 
   useEffect(() => {
@@ -109,6 +231,7 @@ export default function DoorControlPage() {
         }
 
         saveSession(savedToken, currentUser);
+        await refreshDoorStatus(savedToken);
       } catch {
         clearSession();
       } finally {
@@ -117,7 +240,21 @@ export default function DoorControlPage() {
     };
 
     checkSavedSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiBase]);
+
+  useEffect(() => {
+    if (!token || !isAdmin) return;
+
+    refreshDoorStatus(token);
+
+    const interval = window.setInterval(() => {
+      refreshDoorStatus(token);
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, isAdmin]);
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -154,6 +291,7 @@ export default function DoorControlPage() {
       saveSession(data.token, data.user);
       setEmail("");
       setPassword("");
+      await refreshDoorStatus(data.token);
       showTopMessage("Admin login successful ✅", "success");
     } catch (err: any) {
       clearSession();
@@ -175,6 +313,8 @@ export default function DoorControlPage() {
 
     try {
       setUnlocking(true);
+      setLastCommandId("");
+      setLastCommandStatus("");
 
       const response = await fetch(`${apiBase}/api/access/device/manual-unlock`, {
         method: "POST",
@@ -191,15 +331,117 @@ export default function DoorControlPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Door unlock failed.");
+        throw new Error(data.message || "Door unlock request failed.");
       }
 
-      showTopMessage("Unlock command sent ✅", "success");
+      if (!data.commandId) {
+        throw new Error("Door command was not created.");
+      }
+
+      setLastCommandId(data.commandId);
+      setLastCommandStatus("pending");
+      showTopMessage("Unlocking door... waiting for ESP32.", "warning");
+
+      const finalResult = await waitForDoorCommandResult(data.commandId, token);
+
+      showTopMessage(
+        finalResult.message || "Door unlocked successfully ✅",
+        "success"
+      );
+
+      await refreshDoorStatus(token);
     } catch (err: any) {
-      showTopMessage(err?.message || "Door unlock failed.", "error");
+      showTopMessage(
+        err?.message || "Door unlock failed. Please try again.",
+        "error"
+      );
+      await refreshDoorStatus(token);
     } finally {
       setUnlocking(false);
     }
+  };
+
+  const handleRestartController = async () => {
+    if (!token) {
+      showTopMessage("Please login first.", "error");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Restart the ESP32 door controller now? Use this only when the door controller is not responding."
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setRestarting(true);
+      setLastCommandId("");
+      setLastCommandStatus("");
+
+      const response = await fetch(`${apiBase}/api/access/device/restart`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || "Restart request failed.");
+      }
+
+      if (!data.commandId) {
+        throw new Error("Restart command was not created.");
+      }
+
+      setLastCommandId(data.commandId);
+      setLastCommandStatus("pending");
+      showTopMessage("Restart command sent. Waiting for ESP32...", "warning");
+
+      const finalResult = await waitForDoorCommandResult(data.commandId, token);
+
+      showTopMessage(
+        finalResult.message || "Door controller restarting ✅",
+        "success"
+      );
+
+      await refreshDoorStatus(token);
+    } catch (err: any) {
+      showTopMessage(
+        err?.message || "Door controller restart failed.",
+        "error"
+      );
+      await refreshDoorStatus(token);
+    } finally {
+      setRestarting(false);
+    }
+  };
+
+  const getStatusBadgeClass = () => {
+    if (!doorStatus) return "border-white/10 bg-white/[0.04] text-white/60";
+
+    if (!doorStatus.hardwareOnline) {
+      return "border-gray-500/30 bg-gray-900/70 text-gray-200";
+    }
+
+    if (doorStatus.state === "LOCKED_READY") {
+      return "border-emerald-400/30 bg-emerald-950/70 text-emerald-100";
+    }
+
+    if (doorStatus.state === "UNLOCK_WAITING_FOR_PUSH") {
+      return "border-green-400/30 bg-green-950/70 text-green-100";
+    }
+
+    if (
+      doorStatus.state === "DOOR_OPEN_LOCKED" ||
+      doorStatus.state === "UNLOCK_PENDING"
+    ) {
+      return "border-orange-400/30 bg-orange-950/70 text-orange-100";
+    }
+
+    return "border-white/10 bg-white/[0.04] text-white/70";
   };
 
   if (checkingSession) {
@@ -324,25 +566,104 @@ export default function DoorControlPage() {
               <p className="mt-1 text-sm text-white/50">{user?.email}</p>
             </div>
 
-            <div className="my-10 flex flex-1 items-center justify-center">
+            <div className={`mt-5 rounded-3xl border p-5 ${getStatusBadgeClass()}`}>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/45">
+                    Door Controller
+                  </p>
+
+                  <h3 className="mt-2 text-lg font-black">
+                    {doorStatus?.hardwareOnline ? "Online" : "Offline / Unknown"}
+                  </h3>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => refreshDoorStatus(token)}
+                  className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-xs font-black uppercase tracking-wide text-white/70 active:scale-95"
+                >
+                  Refresh
+                </button>
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-white/75">
+                {doorStatus?.message || "Door live status not loaded yet."}
+              </p>
+
+              <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                  <p className="uppercase tracking-[0.2em] text-white/35">State</p>
+                  <p className="mt-1 break-words font-black text-white/80">
+                    {doorStatus?.state || "UNKNOWN"}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
+                  <p className="uppercase tracking-[0.2em] text-white/35">Door</p>
+                  <p className="mt-1 font-black text-white/80">
+                    {doorStatus?.device?.doorOpen
+                      ? "Open"
+                      : doorStatus?.device?.doorClosed
+                      ? "Closed"
+                      : "Unknown"}
+                  </p>
+                </div>
+              </div>
+
+              {doorStatus?.device?.lastHeartbeatAt && (
+                <p className="mt-3 text-[11px] text-white/40">
+                  Last heartbeat:{" "}
+                  {new Date(doorStatus.device.lastHeartbeatAt).toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            {lastCommandId && (
+              <div className="mt-5 rounded-3xl border border-white/10 bg-black/40 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.25em] text-white/35">
+                  Last Command
+                </p>
+
+                <p className="mt-2 break-all text-xs text-white/50">
+                  {lastCommandId}
+                </p>
+
+                <p className="mt-2 text-sm font-black uppercase tracking-wide text-red-300">
+                  {lastCommandStatus || "pending"}
+                </p>
+              </div>
+            )}
+
+            <div className="my-8 flex flex-1 items-center justify-center">
               <button
                 onClick={handleUnlockDoor}
-                disabled={unlocking}
+                disabled={unlocking || restarting}
                 className="flex h-64 w-64 items-center justify-center rounded-full border border-red-400/40 bg-red-600 text-center text-3xl font-black uppercase leading-tight tracking-wide text-white shadow-[0_0_80px_rgba(220,38,38,0.45)] transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {unlocking ? "Sending..." : "Unlock Door"}
+                {unlocking ? "Unlocking..." : "Unlock Door"}
               </button>
             </div>
 
-            <button
-              onClick={() => {
-                clearSession();
-                showTopMessage("Logged out.", "warning");
-              }}
-              className="rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-bold text-white/70"
-            >
-              Logout
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={handleRestartController}
+                disabled={unlocking || restarting}
+                className="w-full rounded-2xl border border-orange-400/30 bg-orange-500/10 px-5 py-4 text-sm font-black uppercase tracking-wide text-orange-100 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {restarting ? "Restarting..." : "Restart Door Controller"}
+              </button>
+
+              <button
+                onClick={() => {
+                  clearSession();
+                  showTopMessage("Logged out.", "warning");
+                }}
+                className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-5 py-4 text-sm font-bold text-white/70"
+              >
+                Logout
+              </button>
+            </div>
           </section>
         )}
 

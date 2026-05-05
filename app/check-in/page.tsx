@@ -19,6 +19,31 @@ type UserType = {
 };
 
 type AccessMode = "entry" | "exit";
+type DoorCommandStatus =
+  | "pending"
+  | "claimed"
+  | "unlocked"
+  | "busy"
+  | "failed"
+  | "rejected_door_open"
+  | "rejected_unknown_action"
+  | "duplicate_ignored"
+  | "restarting"
+  | "online"
+  | "completed"
+  | "expired";
+
+type DoorCommandStatusResponse = {
+  success?: boolean;
+  status?: DoorCommandStatus | string;
+  message?: string;
+  user?: UserType;
+  command?: {
+    id?: string;
+    status?: string;
+    deviceMessage?: string;
+  };
+};
 
 export default function CheckInPage() {
   const router = useRouter();
@@ -36,6 +61,8 @@ export default function CheckInPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [doorSessionId, setDoorSessionId] = useState<string | null>(null);
+  const [doorCommandId, setDoorCommandId] = useState<string | null>(null);
+const [doorUnlockStatus, setDoorUnlockStatus] = useState<string>("");
   const [scannerStarted, setScannerStarted] = useState(false);
   const [successState, setSuccessState] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
@@ -119,6 +146,62 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     };
   }, [scannerStarted]);
 
+  const sleep = (ms: number) =>
+  new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+
+const isFinalSuccessStatus = (status: string) => {
+  return status === "unlocked" || status === "completed";
+};
+
+const isFinalFailureStatus = (status: string) => {
+  return [
+    "busy",
+    "failed",
+    "expired",
+    "rejected_door_open",
+    "rejected_unknown_action",
+  ].includes(status);
+};
+
+const waitForDoorCommandResult = async (
+  commandId: string,
+  token: string
+): Promise<DoorCommandStatusResponse> => {
+  for (let attempt = 1; attempt <= 10; attempt += 1) {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/api/access/command-status/${commandId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data: DoorCommandStatusResponse = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.message || "Failed to check door unlock status.");
+    }
+
+    const status = String(data.status || "").toLowerCase();
+
+    setDoorUnlockStatus(status);
+    setMessage(data.message || "Unlocking door...");
+
+    if (isFinalSuccessStatus(status)) {
+      return data;
+    }
+
+    if (isFinalFailureStatus(status)) {
+      throw new Error(data.message || "Unlock failed. Please scan again.");
+    }
+
+    await sleep(900);
+  }
+
+  throw new Error("Unlock failed. Please scan again.");
+};
+
   const stopScanner = async () => {
     try {
       if (scannerRef.current && scannerRunningRef.current) {
@@ -134,73 +217,96 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   };
 
   const handleAccessAction = async (scannedValue: string) => {
-    const token = localStorage.getItem("token");
+  const token = localStorage.getItem("token");
 
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+  if (!token) {
+    router.push("/login");
+    return;
+  }
 
-    try {
-      setMessage("");
-      setError("");
+  try {
+    setMessage("");
+    setError("");
+    setDoorCommandId(null);
+    setDoorUnlockStatus("");
 
-      const endpoint =
-        mode === "entry"
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`
-          : `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-out`;
+    const endpoint =
+      mode === "entry"
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-out`;
 
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          scannedQrValue: scannedValue,
-          accessPoint: "main-door",
-        }),
-      });
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        scannedQrValue: scannedValue,
+        accessPoint: "main-door",
+      }),
+    });
 
-      const data = await res.json();
+    const data = await res.json();
 
-      if (!res.ok) {
-        setError(data.message || `${mode === "entry" ? "Entry" : "Exit"} failed`);
-
-        unlockTimeoutRef.current = setTimeout(() => {
-          scanLockRef.current = false;
-        }, 1800);
-
-        return;
-      }
-
-      setUser(data.user);
-      setMessage(
-        data.message ||
-          (mode === "entry" ? "Entry successful ✅" : "Exit successful ✅")
-      );
-
-      if (data.doorSessionId) {
-        setDoorSessionId(data.doorSessionId);
-        console.log("Door Session ID:", data.doorSessionId);
-      }
-
-      setSuccessState(true);
-      setRedirecting(true);
-
-      await fetchUser();
-
-      redirectTimeoutRef.current = setTimeout(() => {
-        router.push("/dashboard");
-      }, 1800);
-    } catch {
-      setError(`Something went wrong during ${mode}.`);
+    if (!res.ok) {
+      setError(data.message || `${mode === "entry" ? "Entry" : "Exit"} failed`);
 
       unlockTimeoutRef.current = setTimeout(() => {
         scanLockRef.current = false;
       }, 1800);
+
+      return;
     }
-  };
+
+    if (data.doorSessionId) {
+      setDoorSessionId(data.doorSessionId);
+      console.log("Door Session ID:", data.doorSessionId);
+    }
+
+    if (!data.commandId) {
+      throw new Error("Door command was not created. Please scan again.");
+    }
+
+    setDoorCommandId(data.commandId);
+    setDoorUnlockStatus("pending");
+    setMessage(data.message || "Unlocking door...");
+
+    const finalResult = await waitForDoorCommandResult(data.commandId, token);
+
+    if (finalResult.user) {
+      setUser(finalResult.user);
+    } else {
+      await fetchUser();
+    }
+
+    setMessage(
+      finalResult.message ||
+        (mode === "entry"
+          ? "Door unlocked successfully. Entry recorded ✅"
+          : "Door unlocked successfully. Exit recorded ✅")
+    );
+
+    setSuccessState(true);
+    setRedirecting(true);
+
+    redirectTimeoutRef.current = setTimeout(() => {
+      router.push("/dashboard");
+    }, 2200);
+  } catch (err: any) {
+    setError(
+      err?.message ||
+        `Unlock failed during ${mode}. Please scan again.`
+    );
+
+    setSuccessState(false);
+    setRedirecting(false);
+
+    unlockTimeoutRef.current = setTimeout(() => {
+      scanLockRef.current = false;
+    }, 2200);
+  }
+};
 
   const startScanner = async () => {
     try {
@@ -209,6 +315,8 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
       setSuccessState(false);
       setRedirecting(false);
       setDoorSessionId(null);
+      setDoorCommandId(null);
+setDoorUnlockStatus("");
 
       scanLockRef.current = false;
 
@@ -275,6 +383,8 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     setSuccessState(false);
     setRedirecting(false);
     setDoorSessionId(null);
+    setDoorCommandId(null);
+setDoorUnlockStatus("");
   };
 
   if (loading) {
@@ -446,8 +556,18 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
                     </p>
 
                     {doorSessionId && (
-                      <p className="mt-2 text-xs text-gray-400">Session ID: {doorSessionId}</p>
-                    )}
+  <p className="mt-2 text-xs text-gray-400">Session ID: {doorSessionId}</p>
+)}
+
+{doorCommandId && (
+  <p className="mt-1 text-xs text-gray-400">Command ID: {doorCommandId}</p>
+)}
+
+{doorUnlockStatus && (
+  <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-green-200/80">
+    Door Status: {doorUnlockStatus}
+  </p>
+)}
 
                     <p className="mt-2 text-sm text-green-200/90">
                       Camera closed automatically. Your access action is now recorded.
