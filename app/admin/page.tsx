@@ -3222,6 +3222,16 @@ const integrationStatusCards = useMemo(
                         >
                           {user.isInsideGym ? "Inside" : "Outside"}
                         </span>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            router.push(`/admin/members/${user._id}/body-progress`)
+                          }
+                          className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-gray-200 transition hover:border-red-500/30 hover:bg-red-500/10"
+                        >
+                          Body Progress
+                        </button>
                       </div>
                     </div>
 

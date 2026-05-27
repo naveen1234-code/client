@@ -549,7 +549,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         Start Membership
                       </p>
                       <p className="mt-3 text-3xl font-black text-white">
-                        LKR 4500
+                        LKR 5000
                       </p>
                       <p className="mt-1 text-sm text-gray-300">
                         + LKR 1000 admission
@@ -662,7 +662,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                   </div>
 
                   <h3 className="mt-5 font-display text-4xl uppercase text-white">
-                    LKR 4500
+                    LKR 5000
                   </h3>
 
                   <p className="mt-2 text-sm text-gray-500">
@@ -719,7 +719,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
                   <div className="mt-4 flex items-end gap-3">
                     <h3 className="font-display text-4xl sm:text-5xl uppercase text-white md:text-6xl">
-                      LKR 7500
+                      LKR 9000
                     </h3>
                   </div>
 
@@ -1272,7 +1272,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         Main Plan Starts
                       </p>
                       <p className="mt-3 text-2xl font-semibold text-white">
-                        LKR 4500
+                        LKR 5000
                       </p>
                       <p className="mt-1 text-sm text-gray-500">
                         + LKR 1000 admission
