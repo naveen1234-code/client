@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   getBodyProgressMe,
   getBodyProgressStatusMe,
+  getApiErrorMessage,
   isApiError,
   updateBodyProgressMe,
   uploadBodyProgressMe,
@@ -87,7 +88,7 @@ export default function BodyProgressPage() {
         router.push("/login");
         return;
       }
-      setError(e instanceof Error ? e.message : "Failed to load body progress");
+      setError(getApiErrorMessage(e, "Failed to load body progress"));
     } finally {
       setLoading(false);
     }
@@ -156,7 +157,7 @@ export default function BodyProgressPage() {
       resetForm();
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(getApiErrorMessage(e, "Save failed"));
     } finally {
       setSaving(false);
     }

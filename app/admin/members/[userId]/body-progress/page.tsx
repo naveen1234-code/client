@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   getBodyProgressStatusUser,
   getBodyProgressUser,
+  getApiErrorMessage,
   isApiError,
   updateBodyProgressUser,
   uploadBodyProgressUser,
@@ -94,7 +95,7 @@ export default function AdminMemberBodyProgressPage() {
         router.push("/login");
         return;
       }
-      setError(e instanceof Error ? e.message : "Failed to load member body progress");
+      setError(getApiErrorMessage(e, "Failed to load member body progress"));
     } finally {
       setLoading(false);
     }
@@ -165,7 +166,7 @@ export default function AdminMemberBodyProgressPage() {
       resetForm();
       await load();
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(getApiErrorMessage(e, "Save failed"));
     } finally {
       setSaving(false);
     }

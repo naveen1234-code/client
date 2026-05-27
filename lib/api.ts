@@ -7,6 +7,15 @@ export const isApiError = (e: unknown): e is ApiError => {
   return e instanceof Error && ("status" in e || "body" in e);
 };
 
+export const getApiErrorMessage = (e: unknown, fallback: string) => {
+  if (isApiError(e)) {
+    const detail =
+      isRecord(e.body) && typeof e.body.error === "string" ? e.body.error : "";
+    return detail ? `${e.message}: ${detail}` : e.message;
+  }
+  return e instanceof Error ? e.message : fallback;
+};
+
 const getApiBase = () => {
   const base = process.env.NEXT_PUBLIC_API_URL;
   if (!base) {
