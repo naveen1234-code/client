@@ -28,6 +28,20 @@ type UserType = {
     hydrationLogs: Array<{ amount: number; date: string }>;
     sleepLogs: Array<{ quality: string; hours: number; date: string }>;
     progressPhotos: Array<{ url: string; date: string }>;
+    measurementHistory?: Array<{
+      timestamp: string;
+      weight: number;
+      bodyFat: number;
+      muscleMass: number;
+      chest: number;
+      shoulders: number;
+      waist: number;
+      hips: number;
+      leftBicep: number;
+      rightBicep: number;
+      leftThigh: number;
+      rightThigh: number;
+    }>;
   };
 };
 
@@ -57,6 +71,31 @@ export default function MobileDashboardPage() {
   const [metricValue, setMetricValue] = useState("");
   const [metricQuality, setMetricQuality] = useState("good");
   const [loggingMetric, setLoggingMetric] = useState(false);
+
+  // Full measurement form state
+  const [measurementForm, setMeasurementForm] = useState({
+    weight: "",
+    bodyFat: "",
+    muscleMass: "",
+    chest: "",
+    shoulders: "",
+    waist: "",
+    hips: "",
+    leftBicep: "",
+    rightBicep: "",
+    leftThigh: "",
+    rightThigh: "",
+  });
+  const [savingMeasurement, setSavingMeasurement] = useState(false);
+
+  // AI Health Audit state
+  const [aiAudit, setAiAudit] = useState<string | null>(null);
+  const [loadingAiAudit, setLoadingAiAudit] = useState(false);
+
+  // Training tab state
+  const [dailyHydration, setDailyHydration] = useState(0);
+  const [dailySleep, setDailySleep] = useState(0);
+  const [savingTraining, setSavingTraining] = useState(false);
 
   // Profile picture upload state
   const [uploadingPicture, setUploadingPicture] = useState(false);
@@ -223,6 +262,180 @@ export default function MobileDashboardPage() {
     }
   };
 
+  const handleSaveFullMeasurement = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      setSavingMeasurement(true);
+      setError("");
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/measurement-history`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          weight: parseFloat(measurementForm.weight) || 0,
+          bodyFat: parseFloat(measurementForm.bodyFat) || 0,
+          muscleMass: parseFloat(measurementForm.muscleMass) || 0,
+          chest: parseFloat(measurementForm.chest) || 0,
+          shoulders: parseFloat(measurementForm.shoulders) || 0,
+          waist: parseFloat(measurementForm.waist) || 0,
+          hips: parseFloat(measurementForm.hips) || 0,
+          leftBicep: parseFloat(measurementForm.leftBicep) || 0,
+          rightBicep: parseFloat(measurementForm.rightBicep) || 0,
+          leftThigh: parseFloat(measurementForm.leftThigh) || 0,
+          rightThigh: parseFloat(measurementForm.rightThigh) || 0,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to save measurements");
+        return;
+      }
+
+      setSuccessMessage("Measurements saved successfully ✅");
+      setMeasurementForm({
+        weight: "",
+        bodyFat: "",
+        muscleMass: "",
+        chest: "",
+        shoulders: "",
+        waist: "",
+        hips: "",
+        leftBicep: "",
+        rightBicep: "",
+        leftThigh: "",
+        rightThigh: "",
+      });
+      await fetchUserData();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch {
+      setError("Something went wrong while saving measurements");
+    } finally {
+      setSavingMeasurement(false);
+    }
+  };
+
+  const handleProgressPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload/progress`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to upload progress photo");
+        return;
+      }
+
+      setSuccessMessage("Progress photo uploaded successfully ✅");
+      await fetchUserData();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch {
+      setError("Something went wrong while uploading progress photo");
+    }
+  };
+
+  const handleGenerateAIAudit = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      setLoadingAiAudit(true);
+      setError("");
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/analytics/ai-coach`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to generate AI audit");
+        return;
+      }
+
+      setAiAudit(data.audit);
+    } catch {
+      setError("Something went wrong while generating AI audit");
+    } finally {
+      setLoadingAiAudit(false);
+    }
+  };
+
+  const handleSaveTraining = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      setSavingTraining(true);
+      setError("");
+
+      // Log hydration
+      if (dailyHydration > 0) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/health-metrics`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type: "hydration",
+            value: dailyHydration.toString(),
+          }),
+        });
+      }
+
+      // Log sleep
+      if (dailySleep > 0) {
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/health-metrics`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type: "sleep",
+            value: dailySleep.toString(),
+            additionalData: { quality: "good" },
+          }),
+        });
+      }
+
+      setSuccessMessage("Training data saved successfully ✅");
+      setDailyHydration(0);
+      setDailySleep(0);
+      await fetchUserData();
+      setTimeout(() => setSuccessMessage(""), 3000);
+    } catch {
+      setError("Something went wrong while saving training data");
+    } finally {
+      setSavingTraining(false);
+    }
+  };
+
   const renderHomeTab = () => (
     <div className="space-y-6 pb-24">
       {/* Header with greeting and profile */}
@@ -379,54 +592,235 @@ export default function MobileDashboardPage() {
         </div>
       </div>
 
-      {/* Micro Loggers */}
-      <div className="space-y-3">
-        <button
-          onClick={() => setHealthModal({ type: "weight", isOpen: true })}
-          className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#16161F] p-4 transition hover:border-green-500/30"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚖️</span>
-            <span className="font-semibold text-white">Log Weight</span>
+      {/* Full Measurement Form */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <p className="mb-4 text-sm font-semibold text-gray-400">Full Body Measurements</p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Weight (kg)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.weight}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, weight: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
           </div>
-          <span className="text-gray-400">→</span>
-        </button>
-
-        <button
-          onClick={() => setHealthModal({ type: "hydration", isOpen: true })}
-          className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#16161F] p-4 transition hover:border-blue-500/30"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">💧</span>
-            <span className="font-semibold text-white">Log Hydration</span>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Body Fat %</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.bodyFat}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, bodyFat: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
           </div>
-          <span className="text-gray-400">→</span>
-        </button>
-
-        <button
-          onClick={() => setHealthModal({ type: "sleep", isOpen: true })}
-          className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#16161F] p-4 transition hover:border-purple-500/30"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">😴</span>
-            <span className="font-semibold text-white">Log Sleep</span>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Muscle Mass (kg)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.muscleMass}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, muscleMass: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
           </div>
-          <span className="text-gray-400">→</span>
-        </button>
-
-        <button
-          onClick={() => setHealthModal({ type: "progressPhoto", isOpen: true })}
-          className="flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#16161F] p-4 transition hover:border-red-500/30"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">📸</span>
-            <span className="font-semibold text-white">Upload Progress Photo</span>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Chest (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.chest}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, chest: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
           </div>
-          <span className="text-gray-400">→</span>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Shoulders (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.shoulders}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, shoulders: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Waist (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.waist}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, waist: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Hips (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.hips}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, hips: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Left Bicep (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.leftBicep}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, leftBicep: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Right Bicep (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.rightBicep}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, rightBicep: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Left Thigh (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.leftThigh}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, leftThigh: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Right Thigh (cm)</label>
+            <input
+              type="number"
+              step="0.1"
+              value={measurementForm.rightThigh}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, rightThigh: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
+              placeholder="0"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleSaveFullMeasurement}
+          disabled={savingMeasurement}
+          className="mt-4 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {savingMeasurement ? "Saving..." : "Save Measurements"}
         </button>
       </div>
 
-      {/* Progress Photos */}
+      {/* Before & After Image Comparison */}
+      {user?.healthMetrics?.progressPhotos && user.healthMetrics.progressPhotos.length >= 2 && (
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+          <p className="mb-4 text-sm font-semibold text-gray-400">Before & After Comparison</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="mb-2 text-xs font-semibold text-gray-500">Earliest Photo</p>
+              <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+                <img
+                  src={user.healthMetrics.progressPhotos[0].url}
+                  alt="Before"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-400">
+                {new Date(user.healthMetrics.progressPhotos[0].date).toLocaleDateString()}
+              </p>
+              {user.healthMetrics.measurementHistory?.[0] && (
+                <div className="mt-2 space-y-1 text-xs text-gray-500">
+                  <p>Weight: {user.healthMetrics.measurementHistory[0].weight} kg</p>
+                  <p>Body Fat: {user.healthMetrics.measurementHistory[0].bodyFat}%</p>
+                  <p>Waist: {user.healthMetrics.measurementHistory[0].waist} cm</p>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-semibold text-gray-500">Latest Photo</p>
+              <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+                <img
+                  src={user.healthMetrics.progressPhotos[user.healthMetrics.progressPhotos.length - 1].url}
+                  alt="After"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <p className="mt-2 text-xs text-gray-400">
+                {new Date(user.healthMetrics.progressPhotos[user.healthMetrics.progressPhotos.length - 1].date).toLocaleDateString()}
+              </p>
+              {user.healthMetrics.measurementHistory?.[user.healthMetrics.measurementHistory.length - 1] && (
+                <div className="mt-2 space-y-1 text-xs text-gray-500">
+                  <p>Weight: {user.healthMetrics.measurementHistory[user.healthMetrics.measurementHistory.length - 1].weight} kg</p>
+                  <p>Body Fat: {user.healthMetrics.measurementHistory[user.healthMetrics.measurementHistory.length - 1].bodyFat}%</p>
+                  <p>Waist: {user.healthMetrics.measurementHistory[user.healthMetrics.measurementHistory.length - 1].waist} cm</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Health Engine Audit */}
+      <div className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/10 to-transparent p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-sm font-semibold text-red-400">🤖 AI HEALTH ENGINE AUDIT</p>
+          <button
+            onClick={handleGenerateAIAudit}
+            disabled={loadingAiAudit}
+            className="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loadingAiAudit ? "Analyzing..." : "Generate Audit"}
+          </button>
+        </div>
+        {loadingAiAudit ? (
+          <div className="space-y-3">
+            <div className="h-4 animate-pulse rounded bg-white/10" />
+            <div className="h-4 animate-pulse rounded bg-white/10" />
+            <div className="h-4 animate-pulse rounded bg-white/10" />
+          </div>
+        ) : aiAudit ? (
+          <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+            <p className="whitespace-pre-wrap text-sm text-gray-300">{aiAudit}</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">Click "Generate Audit" to get personalized AI fitness feedback based on your measurement history.</p>
+        )}
+      </div>
+
+      {/* Progress Photo Upload */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <p className="mb-4 text-sm font-semibold text-gray-400">Upload Progress Photo</p>
+        <label className="flex w-full cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-black/40 px-4 py-8 transition hover:border-red-500/30">
+          <div className="text-center">
+            <span className="text-3xl">📸</span>
+            <p className="mt-2 text-sm text-gray-400">Tap to upload photo</p>
+          </div>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handleProgressPhotoUpload}
+            className="hidden"
+          />
+        </label>
+      </div>
+
+      {/* Progress Photos Grid */}
       {user?.healthMetrics?.progressPhotos && user.healthMetrics.progressPhotos.length > 0 && (
         <div>
           <p className="mb-3 text-sm font-semibold text-gray-400">Progress Photos</p>
@@ -446,16 +840,118 @@ export default function MobileDashboardPage() {
     <div className="space-y-6 pb-24">
       <div>
         <h1 className="text-2xl font-bold text-white">Training</h1>
-        <p className="text-sm text-gray-400">Workout programs coming soon</p>
+        <p className="text-sm text-gray-400">Track your daily habits</p>
       </div>
 
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-8 text-center">
-        <div className="text-6xl mb-4">🏋️</div>
-        <p className="text-lg font-semibold text-white">Training Programs</p>
-        <p className="mt-2 text-sm text-gray-400">
-          Custom workout plans and exercise tracking will be available soon.
-        </p>
+      {/* Hydration Tracker */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">💧</span>
+            <div>
+              <p className="font-semibold text-white">Daily Hydration</p>
+              <p className="text-xs text-gray-400">Goal: 8 glasses (2L)</p>
+            </div>
+          </div>
+          <p className="text-2xl font-bold text-blue-400">{dailyHydration} / 8</p>
+        </div>
+        <div className="mb-4 h-3 overflow-hidden rounded-full bg-white/10">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
+            style={{ width: `${Math.min((dailyHydration / 8) * 100, 100)}%` }}
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setDailyHydration(Math.max(0, dailyHydration - 1))}
+            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-blue-500/30 hover:bg-blue-500/10"
+          >
+            -1 Glass
+          </button>
+          <button
+            onClick={() => setDailyHydration(Math.min(8, dailyHydration + 1))}
+            className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            +1 Glass
+          </button>
+        </div>
       </div>
+
+      {/* Sleep Tracker */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="text-3xl">😴</span>
+          <div>
+            <p className="font-semibold text-white">Sleep Hours</p>
+            <p className="text-xs text-gray-400">Log your daily sleep</p>
+          </div>
+        </div>
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-semibold text-gray-400">Hours slept today</label>
+          <input
+            type="range"
+            min="0"
+            max="12"
+            step="0.5"
+            value={dailySleep}
+            onChange={(e) => setDailySleep(parseFloat(e.target.value))}
+            className="w-full accent-purple-500"
+          />
+          <div className="mt-2 flex justify-between text-xs text-gray-400">
+            <span>0h</span>
+            <span className="text-lg font-bold text-purple-400">{dailySleep}h</span>
+            <span>12h</span>
+          </div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+          <p className="text-xs text-gray-400">
+            {dailySleep < 6
+              ? "⚠️ Low sleep - aim for 7-9 hours for optimal recovery"
+              : dailySleep >= 7 && dailySleep <= 9
+              ? "✅ Optimal sleep range for muscle recovery"
+              : dailySleep > 9
+              ? "💤 Extended sleep - ensure you're maintaining consistency"
+              : "Track your sleep to optimize recovery"}
+          </p>
+        </div>
+      </div>
+
+      {/* Daily Checklist */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <p className="mb-4 text-sm font-semibold text-gray-400">Daily Checklist</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🏋️</span>
+              <span className="text-sm font-semibold text-white">Workout Completed</span>
+            </div>
+            <input type="checkbox" className="h-5 w-5 accent-red-500" />
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🥗</span>
+              <span className="text-sm font-semibold text-white">Healthy Meals</span>
+            </div>
+            <input type="checkbox" className="h-5 w-5 accent-red-500" />
+          </div>
+          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🧘</span>
+              <span className="text-sm font-semibold text-white">Stretching</span>
+            </div>
+            <input type="checkbox" className="h-5 w-5 accent-red-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* Save Button */}
+      <button
+        onClick={handleSaveTraining}
+        disabled={savingTraining || (dailyHydration === 0 && dailySleep === 0)}
+        className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {savingTraining ? "Saving..." : "Save Daily Training Data"}
+      </button>
     </div>
   );
 
