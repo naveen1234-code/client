@@ -190,7 +190,7 @@ export default function BodyProgressPage() {
               </p>
             </div>
             <button
-              onClick={() => router.push("/access")}
+              onClick={() => router.push("/mobile")}
               className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.2em] text-gray-200 hover:bg-white/10"
             >
               Back

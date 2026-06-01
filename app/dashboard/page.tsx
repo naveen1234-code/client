@@ -248,11 +248,11 @@ export default function DashboardPage() {
               </div>
 
               <button
-  onClick={() => router.push("/access")}
-  className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:scale-[1.01] hover:bg-red-700"
->
-  Open Access App
-</button>
+                onClick={() => router.push("/mobile")}
+                className="rounded-2xl bg-red-600 px-6 py-3 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:scale-[1.01] hover:bg-red-700"
+              >
+                Open Mobile App
+              </button>
 
               <button
                 onClick={() => router.push("/payments")}

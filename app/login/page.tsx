@@ -42,13 +42,14 @@ export default function LoginPage() {
         setMessage(data.message || "Login failed");
       } else {
         localStorage.setItem("token", data.token);
+        localStorage.setItem("userRole", data.user?.role || "member");
 setMessage("Login successful ✅ Redirecting...");
 
 setTimeout(() => {
   if (data.user?.role === "admin") {
     router.push("/admin");
   } else {
-    router.push("/access");
+    router.push("/mobile");
   }
 }, 900);
       }

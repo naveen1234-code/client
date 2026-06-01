@@ -136,6 +136,7 @@ export default function MobileDashboardPage() {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
     router.push("/login");
   };
 
@@ -1012,6 +1013,20 @@ export default function MobileDashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Admin Portal Gateway - Only visible for admin users */}
+      {user?.role === "admin" && (
+        <button
+          onClick={() => router.push("/admin")}
+          className="flex w-full items-center justify-between rounded-3xl border border-red-500/30 bg-red-500/10 p-4 transition hover:bg-red-500/20"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">🔐</span>
+            <span className="font-semibold text-red-400">Go to Admin Panel</span>
+          </div>
+          <span className="text-red-400">→</span>
+        </button>
+      )}
 
       {/* PWA Install Button */}
       <button
