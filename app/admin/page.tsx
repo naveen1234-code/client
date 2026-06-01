@@ -81,6 +81,21 @@ type BookingType = {
   createdAt: string;
 };
 
+type LegacyClaimType = {
+  _id: string;
+  userId: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  claimId: string;
+  legacyPlan: string;
+  status: string;
+  claimedAt: string;
+  ledgerDetails: string;
+  notes: string;
+};
+
 type NotificationType = {
   _id: string;
   userId?: string | null;
@@ -197,6 +212,10 @@ export default function AdminPage() {
   const [insideMembers, setInsideMembers] = useState<UserType[]>([]);
   const [accessStats, setAccessStats] = useState<AccessStatsType | null>(null);
   const [showAdminInstallPopup, setShowAdminInstallPopup] = useState(false);
+  const [legacyClaims, setLegacyClaims] = useState<LegacyClaimType[]>([]);
+  const [legacyClaimsLoading, setLegacyClaimsLoading] = useState(true);
+  const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
+  const [showAllLegacyClaims, setShowAllLegacyClaims] = useState(false);
 
   const [statementMonth, setStatementMonth] = useState(currentDate.getMonth() + 1);
   const [statementYear, setStatementYear] = useState(currentDate.getFullYear());
@@ -317,6 +336,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
           accessLogsRes,
           insideMembersRes,
           accessStatsRes,
+          legacyClaimsRes,
         ] = await Promise.all([
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/users`, {
             headers: { Authorization: `Bearer ${token}` },
@@ -339,6 +359,9 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/access/stats`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
         ]);
 
         const usersData = await usersRes.json();
@@ -348,6 +371,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         const accessLogsData = await accessLogsRes.json();
         const insideMembersData = await insideMembersRes.json();
         const accessStatsData = await accessStatsRes.json();
+        const legacyClaimsData = await legacyClaimsRes.json();
 
         if (usersRes.ok) setUsers(usersData);
         if (paymentsRes.ok) setPayments(paymentsData);
@@ -356,6 +380,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         if (accessLogsRes.ok) setAccessLogs(accessLogsData);
         if (insideMembersRes.ok) setInsideMembers(insideMembersData);
         if (accessStatsRes.ok) setAccessStats(accessStatsData);
+        if (legacyClaimsRes.ok) setLegacyClaims(legacyClaimsData);
       } catch (fetchError) {
         console.error("Admin fetch error:", fetchError);
         setError("Failed to load admin data");
@@ -365,6 +390,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         setBookingsLoading(false);
         setNotificationsLoading(false);
         setAccessLoading(false);
+        setLegacyClaimsLoading(false);
       }
     };
 
@@ -423,6 +449,89 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
 
     const bookingsData = await bookingsRes.json();
     if (bookingsRes.ok) setBookings(bookingsData);
+  };
+
+  const refreshLegacyClaims = async () => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    const legacyClaimsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const legacyClaimsData = await legacyClaimsRes.json();
+    if (legacyClaimsRes.ok) setLegacyClaims(legacyClaimsData);
+  };
+
+  const handleApproveLegacyClaim = async (claimId: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      setProcessingClaimId(claimId);
+      setError("");
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims/${claimId}/approve`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to approve legacy claim");
+        return;
+      }
+
+      setSuccessMessage("Legacy claim approved successfully ✅");
+
+      // Instant state refresh - remove the claim from the list
+      setLegacyClaims(legacyClaims.filter((claim) => claim._id !== claimId));
+
+      // Refresh users to get updated membership data
+      await refreshUsers();
+    } catch {
+      setError("Something went wrong while approving legacy claim");
+    } finally {
+      setProcessingClaimId(null);
+    }
+  };
+
+  const handleRejectLegacyClaim = async (claimId: string) => {
+    const token = localStorage.getItem("token");
+    if (!token) return;
+
+    try {
+      setProcessingClaimId(claimId);
+      setError("");
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims/${claimId}/reject`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to reject legacy claim");
+        return;
+      }
+
+      setSuccessMessage("Legacy claim rejected successfully ✅");
+
+      // Instant state refresh - remove the claim from the list
+      setLegacyClaims(legacyClaims.filter((claim) => claim._id !== claimId));
+    } catch {
+      setError("Something went wrong while rejecting legacy claim");
+    } finally {
+      setProcessingClaimId(null);
+    }
   };
 
   const fetchMonthlyStatement = async (year: number, month: number) => {
@@ -947,6 +1056,12 @@ const handleSmartMemberSelect = (userId: string) => {
     );
   }, [bookings]);
 
+  const sortedLegacyClaims = useMemo(() => {
+    return [...legacyClaims].sort(
+      (a, b) => new Date(b.claimedAt).getTime() - new Date(a.claimedAt).getTime()
+    );
+  }, [legacyClaims]);
+
   const sortedNotifications = useMemo(() => {
     return [...notifications].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -1270,6 +1385,12 @@ const smartMembershipFinalValues = useMemo(() => {
       ? sortedBookings
       : sortedBookings.slice(0, INITIAL_VISIBLE_COUNT);
   }, [sortedBookings, showAllBookings]);
+
+  const displayedLegacyClaims = useMemo(() => {
+    return showAllLegacyClaims
+      ? sortedLegacyClaims
+      : sortedLegacyClaims.slice(0, INITIAL_VISIBLE_COUNT);
+  }, [sortedLegacyClaims, showAllLegacyClaims]);
 
   const displayedAccessLogs = useMemo(() => {
     return showAllAccessLogs
@@ -3362,6 +3483,123 @@ const integrationStatusCards = useMemo(
               </div>
             </section>
           </div>
+
+          <section
+            ref={setSectionRef("legacy-claims")}
+            className={`rounded-[30px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur sm:p-8 ${
+              highlightedSection === "legacy-claims"
+                ? "ring-4 ring-red-500/60 shadow-[0_0_35px_rgba(239,68,68,0.45)] transition-all duration-300"
+                : ""
+            }`}
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-red-400">
+                  Legacy Membership Claims
+                </p>
+                <h2 className="mt-3 text-3xl font-black uppercase tracking-tight text-white">
+                  Pending Claims Queue
+                </h2>
+              </div>
+
+              {sortedLegacyClaims.length > INITIAL_VISIBLE_COUNT && (
+                <button
+                  onClick={() => setShowAllLegacyClaims((prev) => !prev)}
+                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-white transition hover:border-red-500/30 hover:bg-red-500/10"
+                >
+                  {showAllLegacyClaims ? "Show Less" : "Show More"}
+                </button>
+              )}
+            </div>
+
+            {legacyClaimsLoading ? (
+              <p className="mt-6 text-gray-400">Loading legacy claims...</p>
+            ) : sortedLegacyClaims.length === 0 ? (
+              <p className="mt-6 text-gray-400">No pending legacy claims found.</p>
+            ) : (
+              <div className="mt-6 space-y-4">
+                {displayedLegacyClaims.map((claim) => (
+                  <div
+                    key={claim._id}
+                    className="rounded-[24px] border border-white/10 bg-black/40 p-4 transition duration-300 hover:border-red-500/20 hover:bg-black/55"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-base font-black uppercase tracking-[0.08em] text-white">
+                          {claim.userId.name}
+                        </p>
+                        <p className="mt-1 break-all text-sm text-gray-400">
+                          {claim.userId.email}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className="inline-flex rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-blue-400">
+                          {claim.legacyPlan}
+                        </span>
+
+                        <span className="inline-flex rounded-full border border-yellow-500/20 bg-yellow-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-yellow-400">
+                          {claim.claimId}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                          Ledger Details
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-white">
+                          {claim.ledgerDetails || "No details provided"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                          Claimed At
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-white">
+                          {new Date(claim.claimedAt).toLocaleDateString("en-US", {
+                            year: "numeric",
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <button
+                        onClick={() => handleApproveLegacyClaim(claim._id)}
+                        disabled={processingClaimId === claim._id}
+                        className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
+                          processingClaimId === claim._id
+                            ? "cursor-not-allowed bg-green-900/40 text-green-300/60"
+                            : "bg-green-600 hover:bg-green-700"
+                        }`}
+                      >
+                        {processingClaimId === claim._id ? "Approving..." : "Approve"}
+                      </button>
+
+                      <button
+                        onClick={() => handleRejectLegacyClaim(claim._id)}
+                        disabled={processingClaimId === claim._id}
+                        className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
+                          processingClaimId === claim._id
+                            ? "cursor-not-allowed bg-red-900/40 text-red-300/60"
+                            : "bg-red-600 hover:bg-red-700"
+                        }`}
+                      >
+                        {processingClaimId === claim._id ? "Rejecting..." : "Reject"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
           <section
             ref={setSectionRef("latest-bookings")}
