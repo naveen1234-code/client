@@ -72,19 +72,13 @@ export default function MobileDashboardPage() {
   const [metricQuality, setMetricQuality] = useState("good");
   const [loggingMetric, setLoggingMetric] = useState(false);
 
-  // Full measurement form state
+  // Full measurement form state (simplified to 5 key metrics)
   const [measurementForm, setMeasurementForm] = useState({
     weight: "",
-    bodyFat: "",
-    muscleMass: "",
     chest: "",
-    shoulders: "",
     waist: "",
-    hips: "",
-    leftBicep: "",
-    rightBicep: "",
-    leftThigh: "",
-    rightThigh: "",
+    arms: "",
+    legs: "",
   });
   const [savingMeasurement, setSavingMeasurement] = useState(false);
 
@@ -278,16 +272,16 @@ export default function MobileDashboardPage() {
         },
         body: JSON.stringify({
           weight: parseFloat(measurementForm.weight) || 0,
-          bodyFat: parseFloat(measurementForm.bodyFat) || 0,
-          muscleMass: parseFloat(measurementForm.muscleMass) || 0,
           chest: parseFloat(measurementForm.chest) || 0,
-          shoulders: parseFloat(measurementForm.shoulders) || 0,
           waist: parseFloat(measurementForm.waist) || 0,
-          hips: parseFloat(measurementForm.hips) || 0,
-          leftBicep: parseFloat(measurementForm.leftBicep) || 0,
-          rightBicep: parseFloat(measurementForm.rightBicep) || 0,
-          leftThigh: parseFloat(measurementForm.leftThigh) || 0,
-          rightThigh: parseFloat(measurementForm.rightThigh) || 0,
+          leftBicep: parseFloat(measurementForm.arms) || 0,
+          rightBicep: parseFloat(measurementForm.arms) || 0,
+          leftThigh: parseFloat(measurementForm.legs) || 0,
+          rightThigh: parseFloat(measurementForm.legs) || 0,
+          bodyFat: 0,
+          muscleMass: 0,
+          shoulders: 0,
+          hips: 0,
         }),
       });
 
@@ -301,16 +295,10 @@ export default function MobileDashboardPage() {
       setSuccessMessage("Measurements saved successfully ✅");
       setMeasurementForm({
         weight: "",
-        bodyFat: "",
-        muscleMass: "",
         chest: "",
-        shoulders: "",
         waist: "",
-        hips: "",
-        leftBicep: "",
-        rightBicep: "",
-        leftThigh: "",
-        rightThigh: "",
+        arms: "",
+        legs: "",
       });
       await fetchUserData();
       setTimeout(() => setSuccessMessage(""), 3000);
@@ -580,148 +568,112 @@ export default function MobileDashboardPage() {
         </div>
         <div className="rounded-2xl border border-white/10 bg-[#16161F] p-4 text-center">
           <p className="text-2xl font-bold text-white">
-            {user?.healthMetrics?.bodyFatLogs?.[0]?.bodyFat || "--"}
+            {user?.healthMetrics?.measurementHistory?.[0]?.chest || "--"}
           </p>
-          <p className="text-xs text-gray-400">Body Fat %</p>
+          <p className="text-xs text-gray-400">Chest (cm)</p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-[#16161F] p-4 text-center">
           <p className="text-2xl font-bold text-white">
-            {user?.healthMetrics?.muscleMassLogs?.[0]?.muscleMass || "--"}
+            {user?.healthMetrics?.measurementHistory?.[0]?.waist || "--"}
           </p>
-          <p className="text-xs text-gray-400">Muscle (kg)</p>
+          <p className="text-xs text-gray-400">Waist (cm)</p>
         </div>
       </div>
 
-      {/* Full Measurement Form */}
+      {/* Simplified Measurement Form */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Full Body Measurements</p>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Weight (kg)</label>
+        <p className="mb-4 text-sm font-semibold text-gray-400">Log Measurements</p>
+        <div className="space-y-4">
+          <div className="relative">
             <input
               type="number"
               step="0.1"
               value={measurementForm.weight}
               onChange={(e) => setMeasurementForm({ ...measurementForm, weight: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
+              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
+              placeholder="Weight"
+              id="weight-input"
             />
+            <label
+              htmlFor="weight-input"
+              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+            >
+              Weight (kg)
+            </label>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Body Fat %</label>
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.bodyFat}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, bodyFat: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Muscle Mass (kg)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.muscleMass}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, muscleMass: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Chest (cm)</label>
+          <div className="relative">
             <input
               type="number"
               step="0.1"
               value={measurementForm.chest}
               onChange={(e) => setMeasurementForm({ ...measurementForm, chest: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
+              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
+              placeholder="Chest"
+              id="chest-input"
             />
+            <label
+              htmlFor="chest-input"
+              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+            >
+              Chest (cm)
+            </label>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Shoulders (cm)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.shoulders}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, shoulders: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Waist (cm)</label>
+          <div className="relative">
             <input
               type="number"
               step="0.1"
               value={measurementForm.waist}
               onChange={(e) => setMeasurementForm({ ...measurementForm, waist: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
+              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
+              placeholder="Waist"
+              id="waist-input"
             />
+            <label
+              htmlFor="waist-input"
+              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+            >
+              Waist (cm)
+            </label>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Hips (cm)</label>
+          <div className="relative">
             <input
               type="number"
               step="0.1"
-              value={measurementForm.hips}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, hips: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
+              value={measurementForm.arms}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, arms: e.target.value })}
+              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
+              placeholder="Arms"
+              id="arms-input"
             />
+            <label
+              htmlFor="arms-input"
+              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+            >
+              Arms (cm)
+            </label>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Left Bicep (cm)</label>
+          <div className="relative">
             <input
               type="number"
               step="0.1"
-              value={measurementForm.leftBicep}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, leftBicep: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
+              value={measurementForm.legs}
+              onChange={(e) => setMeasurementForm({ ...measurementForm, legs: e.target.value })}
+              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
+              placeholder="Legs"
+              id="legs-input"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Right Bicep (cm)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.rightBicep}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, rightBicep: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Left Thigh (cm)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.leftThigh}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, leftThigh: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-gray-400">Right Thigh (cm)</label>
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.rightThigh}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, rightThigh: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none text-sm"
-              placeholder="0"
-            />
+            <label
+              htmlFor="legs-input"
+              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+            >
+              Legs (cm)
+            </label>
           </div>
         </div>
         <button
           onClick={handleSaveFullMeasurement}
           disabled={savingMeasurement}
-          className="mt-4 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-6 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {savingMeasurement ? "Saving..." : "Save Measurements"}
         </button>
@@ -731,46 +683,41 @@ export default function MobileDashboardPage() {
       {user?.healthMetrics?.progressPhotos && user.healthMetrics.progressPhotos.length >= 2 && (
         <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
           <p className="mb-4 text-sm font-semibold text-gray-400">Before & After Comparison</p>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <p className="mb-2 text-xs font-semibold text-gray-500">Earliest Photo</p>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <p className="mb-2 text-xs font-semibold text-gray-500">Before</p>
               <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-black/40">
                 <img
                   src={user.healthMetrics.progressPhotos[0].url}
                   alt="Before"
                   className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316161F'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
+                  }}
                 />
               </div>
               <p className="mt-2 text-xs text-gray-400">
                 {new Date(user.healthMetrics.progressPhotos[0].date).toLocaleDateString()}
               </p>
-              {user.healthMetrics.measurementHistory?.[0] && (
-                <div className="mt-2 space-y-1 text-xs text-gray-500">
-                  <p>Weight: {user.healthMetrics.measurementHistory[0].weight} kg</p>
-                  <p>Body Fat: {user.healthMetrics.measurementHistory[0].bodyFat}%</p>
-                  <p>Waist: {user.healthMetrics.measurementHistory[0].waist} cm</p>
-                </div>
-              )}
             </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold text-gray-500">Latest Photo</p>
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
+              VS
+            </div>
+            <div className="flex-1">
+              <p className="mb-2 text-xs font-semibold text-gray-500">After</p>
               <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-black/40">
                 <img
                   src={user.healthMetrics.progressPhotos[user.healthMetrics.progressPhotos.length - 1].url}
                   alt="After"
                   className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316161F'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
+                  }}
                 />
               </div>
               <p className="mt-2 text-xs text-gray-400">
                 {new Date(user.healthMetrics.progressPhotos[user.healthMetrics.progressPhotos.length - 1].date).toLocaleDateString()}
               </p>
-              {user.healthMetrics.measurementHistory?.[user.healthMetrics.measurementHistory.length - 1] && (
-                <div className="mt-2 space-y-1 text-xs text-gray-500">
-                  <p>Weight: {user.healthMetrics.measurementHistory[user.healthMetrics.measurementHistory.length - 1].weight} kg</p>
-                  <p>Body Fat: {user.healthMetrics.measurementHistory[user.healthMetrics.measurementHistory.length - 1].bodyFat}%</p>
-                  <p>Waist: {user.healthMetrics.measurementHistory[user.healthMetrics.measurementHistory.length - 1].waist} cm</p>
-                </div>
-              )}
             </div>
           </div>
         </div>
@@ -827,7 +774,14 @@ export default function MobileDashboardPage() {
           <div className="grid grid-cols-3 gap-3">
             {user.healthMetrics.progressPhotos.slice(0, 6).map((photo, index) => (
               <div key={index} className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-[#16161F]">
-                <img src={photo.url} alt={`Progress ${index + 1}`} className="h-full w-full object-cover" />
+                <img 
+                  src={photo.url} 
+                  alt={`Progress ${index + 1}`} 
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316161F'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
+                  }}
+                />
               </div>
             ))}
           </div>
