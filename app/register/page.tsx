@@ -80,6 +80,11 @@ const turnstileWidgetIdRef = useRef<string | null>(null);
     email: "",
     password: "",
     memberSignature: "",
+    isLegacyMember: false,
+    claimedPhone: "",
+    startMonth: "",
+    startYear: "",
+    previousPlan: "",
   });
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -358,15 +363,20 @@ useEffect(() => {
       setError("");
       setSuccess("");
 
+      // Build payload, omitting legacy fields when not applicable
+      const payload = {
+        ...formData,
+        turnstileToken,
+        ...(formData.isLegacyMember
+          ? {}
+          : { claimedPhone: undefined, startMonth: undefined, startYear: undefined, previousPlan: undefined }),
+      };
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...formData,
-          turnstileToken,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -656,6 +666,85 @@ useEffect(() => {
                     className={inputClass}
                   />
                 </div>
+
+                {/* Legacy member toggle */}
+                <div className="mt-4 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    name="isLegacyMember"
+                    checked={formData.isLegacyMember}
+                    onChange={handleChange}
+                    className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <label className={labelClass}>
+                    Are you an existing gym member migrating from our physical book ledger?
+                  </label>
+                </div>
+
+                {/* Legacy member fields */}
+                {formData.isLegacyMember && (
+                  <div className="mt-5 rounded-[24px] border border-red-500/20 bg-red-500/10 p-5">
+                    <p className={labelClass}>Legacy Membership Details</p>
+                    <div className="mt-4">
+                      <label className={labelClass}>Claimed Phone Number</label>
+                      <input
+                        name="claimedPhone"
+                        value={formData.claimedPhone}
+                        onChange={handleChange}
+                        placeholder="e.g. 0771234567"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="mt-4">
+                      <label className={labelClass}>Start Month</label>
+                      <select
+                        name="startMonth"
+                        value={formData.startMonth}
+                        onChange={handleChange}
+                        className={selectClass}
+                      >
+                        <option value="">Select month</option>
+                        {[
+                          "January","February","March","April","May","June",
+                          "July","August","September","October","November","December"
+                        ].map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mt-4">
+                      <label className={labelClass}>Start Year</label>
+                      <select
+                        name="startYear"
+                        value={formData.startYear}
+                        onChange={handleChange}
+                        className={selectClass}
+                      >
+                        <option value="">Select year</option>
+                        {Array.from({ length: 5 }, (_, i) => {
+                          const year = new Date().getFullYear() - i;
+                          return (
+                            <option key={year} value={year}>{year}</option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                    <div className="mt-4">
+                      <label className={labelClass}>Previous Membership Plan Type</label>
+                      <select
+                        name="previousPlan"
+                        value={formData.previousPlan}
+                        onChange={handleChange}
+                        className={selectClass}
+                      >
+                        <option value="">Select plan</option>
+                        <option value="basic">Basic</option>
+                        <option value="standard">Standard</option>
+                        <option value="premium">Premium</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className={labelClass}>Application Date</label>
