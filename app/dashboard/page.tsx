@@ -3,6 +3,7 @@
 import PageTransition from "@/components/PageTransition";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useEffect as useEffectClient } from "react";
 
 type UserType = {
   name: string;
@@ -47,6 +48,19 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<UserType | null>(null);
   const [error, setError] = useState("");
+
+  // Redirect to mobile view on small screens
+  useEffectClient(() => {
+    const checkMobile = () => {
+      if (window.innerWidth < 768) {
+        router.push("/mobile");
+      }
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, [router]);
 
   const [bookings, setBookings] = useState<BookingType[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(true);
