@@ -132,3 +132,27 @@ export async function updateBodyProgressUser(
   );
 }
 
+// Legacy Claims API
+export async function getLegacyClaims() {
+  return apiFetch<{
+    _id: string;
+    userId: {
+      _id: string;
+      name: string;
+      email: string;
+    };
+    claimId: string;
+    legacyPlan: string;
+    status: string;
+    claimedAt: string;
+    ledgerDetails: string;
+    notes: string;
+  }[]>("/api/admin/legacy-claims");
+}
+
+export async function approveLegacyClaim(claimId: string) {
+  return apiFetch<{ message: string; claim: unknown; user: unknown }>(
+    `/api/admin/legacy-claims/${claimId}/approve`,
+    { method: "PUT" }
+  );
+}
