@@ -385,7 +385,7 @@ useEffect(() => {
         turnstileToken,
       };
 
-      console.log("Form Data:", submitData);
+      console.log("FINAL SUBMIT DATA:", submitData);
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
         method: "POST",
@@ -395,7 +395,9 @@ useEffect(() => {
         body: JSON.stringify(submitData),
       });
 
+      console.log("REGISTER RESPONSE STATUS:", res.status);
       const data = await res.json();
+      console.log("REGISTER RESPONSE DATA:", data);
 
       if (!res.ok) {
         setError(data.error || data.message || "Registration failed");
@@ -754,9 +756,10 @@ useEffect(() => {
                         className={selectClass}
                       >
                         <option value="">Select plan</option>
-                        <option value="basic">Basic</option>
-                        <option value="standard">Standard</option>
-                        <option value="premium">Premium</option>
+                        <option value="1 Year">1 Year</option>
+                        <option value="6 Months">6 Months</option>
+                        <option value="3 Months">3 Months</option>
+                        <option value="Monthly">Monthly</option>
                       </select>
                     </div>
                   </div>
