@@ -74,7 +74,9 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [verifying, setVerifying] = useState(false);
 
   const fetchUser = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
+
+    console.log("Auth State at Scanner Trigger:", token ? "Token found" : "No token");
 
     if (!token) {
       router.push("/login");
@@ -92,6 +94,7 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
       if (!res.ok) {
         localStorage.removeItem("token");
+        localStorage.removeItem("userRole");
         router.push("/login");
         return;
       }
@@ -106,7 +109,7 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   useEffect(() => {
     fetchUser();
-  }, [router]);
+  }, []);
 
   useEffect(() => {
   const handler = (e: Event) => {
@@ -348,6 +351,8 @@ const waitForDoorCommandResult = async (
 
   const startScanner = async () => {
     try {
+      console.log("Starting scanner - Auth check:", getToken() ? "Token valid" : "No token");
+      
       setError("");
       setMessage("");
       setSuccessState(false);
