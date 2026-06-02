@@ -599,7 +599,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
     }
   };
 
-  const handleEditLegacyClaim = (claim: LegacyClaimType) => {
+  const handleEditLegacyClaim = (claim: any) => {
     setEditingClaimId(claim._id);
     setEditClaimForm({
       claimedPhoneNumber: claim.claimedPhoneNumber || "",
@@ -3638,7 +3638,7 @@ const integrationStatusCards = useMemo(
               <p className="mt-6 text-gray-400">No pending legacy claims found.</p>
             ) : (
               <div className="mt-6 space-y-4">
-                {displayedLegacyClaims.map((claim) => (
+                {displayedLegacyClaims.map((claim: any) => (
                   <div
                     key={claim._id}
                     className="rounded-[24px] border border-white/10 bg-black/40 p-4 transition duration-300 hover:border-red-500/20 hover:bg-black/55"
