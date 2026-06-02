@@ -91,6 +91,9 @@ type LegacyClaimType = {
   };
   claimId: string;
   legacyPlan: string;
+  claimedPhoneNumber?: string;
+  startMonth?: string;
+  startYear?: string;
   status: string;
   claimedAt: string;
   ledgerDetails: string;
@@ -217,6 +220,13 @@ export default function AdminPage() {
   const [legacyClaimsLoading, setLegacyClaimsLoading] = useState(true);
   const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
   const [showAllLegacyClaims, setShowAllLegacyClaims] = useState(false);
+  const [editingClaimId, setEditingClaimId] = useState<string | null>(null);
+  const [editClaimForm, setEditClaimForm] = useState({
+    claimedPhoneNumber: "",
+    startMonth: "",
+    startYear: "",
+    previousMembershipPlanType: "",
+  });
 
   const [statementMonth, setStatementMonth] = useState(currentDate.getMonth() + 1);
   const [statementYear, setStatementYear] = useState(currentDate.getFullYear());
@@ -584,6 +594,61 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
       setLegacyClaims(legacyClaims.filter((claim) => claim._id !== claimId));
     } catch {
       setError("Something went wrong while rejecting legacy claim");
+    } finally {
+      setProcessingClaimId(null);
+    }
+  };
+
+  const handleEditLegacyClaim = (claim: LegacyClaimType) => {
+    setEditingClaimId(claim._id);
+    setEditClaimForm({
+      claimedPhoneNumber: claim.claimedPhoneNumber || "",
+      startMonth: claim.startMonth || "",
+      startYear: claim.startYear || "",
+      previousMembershipPlanType: claim.legacyPlan || "",
+    });
+  };
+
+  const handleSaveLegacyClaim = async () => {
+    try {
+      setProcessingClaimId(editingClaimId);
+
+      const token = getToken();
+      if (!token || !editingClaimId) return;
+
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims/${editingClaimId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(editClaimForm),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Failed to update legacy claim");
+        return;
+      }
+
+      setSuccessMessage("Legacy claim updated successfully ✅");
+
+      // Update the claim in the list
+      setLegacyClaims(
+        legacyClaims.map((claim) =>
+          claim._id === editingClaimId
+            ? { ...claim, ...editClaimForm, legacyPlan: editClaimForm.previousMembershipPlanType }
+            : claim
+        )
+      );
+
+      setEditingClaimId(null);
+    } catch {
+      setError("Something went wrong while updating legacy claim");
     } finally {
       setProcessingClaimId(null);
     }
@@ -3602,10 +3667,19 @@ const integrationStatusCards = useMemo(
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
                         <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
-                          Ledger Details
+                          Claimed Phone Number
                         </p>
                         <p className="mt-2 text-sm font-semibold text-white">
-                          {claim.ledgerDetails || "No details provided"}
+                          {claim.claimedPhoneNumber || "No phone provided"}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+                          Start Date
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-white">
+                          {claim.startMonth && claim.startYear ? `${claim.startMonth} ${claim.startYear}` : "No date provided"}
                         </p>
                       </div>
 
@@ -3626,30 +3700,128 @@ const integrationStatusCards = useMemo(
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <button
-                        onClick={() => handleApproveLegacyClaim(claim._id)}
-                        disabled={processingClaimId === claim._id}
-                        className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
-                          processingClaimId === claim._id
-                            ? "cursor-not-allowed bg-green-900/40 text-green-300/60"
-                            : "bg-green-600 hover:bg-green-700"
-                        }`}
-                      >
-                        {processingClaimId === claim._id ? "Approving..." : "Approve"}
-                      </button>
-
-                      <button
-                        onClick={() => handleRejectLegacyClaim(claim._id)}
-                        disabled={processingClaimId === claim._id}
-                        className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
-                          processingClaimId === claim._id
-                            ? "cursor-not-allowed bg-red-900/40 text-red-300/60"
-                            : "bg-red-600 hover:bg-red-700"
-                        }`}
-                      >
-                        {processingClaimId === claim._id ? "Rejecting..." : "Reject"}
-                      </button>
+                      {editingClaimId === claim._id ? (
+                        <>
+                          <button
+                            onClick={handleSaveLegacyClaim}
+                            disabled={processingClaimId === claim._id}
+                            className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
+                              processingClaimId === claim._id
+                                ? "cursor-not-allowed bg-blue-900/40 text-blue-300/60"
+                                : "bg-blue-600 hover:bg-blue-700"
+                            }`}
+                          >
+                            {processingClaimId === claim._id ? "Saving..." : "Save"}
+                          </button>
+                          <button
+                            onClick={() => setEditingClaimId(null)}
+                            className="rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white bg-gray-600 hover:bg-gray-700 transition duration-300"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleEditLegacyClaim(claim)}
+                            className="rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white bg-blue-600 hover:bg-blue-700 transition duration-300"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleApproveLegacyClaim(claim._id)}
+                            disabled={processingClaimId === claim._id}
+                            className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
+                              processingClaimId === claim._id
+                                ? "cursor-not-allowed bg-green-900/40 text-green-300/60"
+                                : "bg-green-600 hover:bg-green-700"
+                            }`}
+                          >
+                            {processingClaimId === claim._id ? "Approving..." : "Approve"}
+                          </button>
+                          <button
+                            onClick={() => handleRejectLegacyClaim(claim._id)}
+                            disabled={processingClaimId === claim._id}
+                            className={`rounded-xl px-5 py-2.5 text-xs font-bold uppercase tracking-[0.18em] text-white transition duration-300 ${
+                              processingClaimId === claim._id
+                                ? "cursor-not-allowed bg-red-900/40 text-red-300/60"
+                                : "bg-red-600 hover:bg-red-700"
+                            }`}
+                          >
+                            {processingClaimId === claim._id ? "Rejecting..." : "Reject"}
+                          </button>
+                        </>
+                      )}
                     </div>
+
+                    {editingClaimId === claim._id && (
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
+                            Phone Number
+                          </label>
+                          <input
+                            type="text"
+                            value={editClaimForm.claimedPhoneNumber}
+                            onChange={(e) => setEditClaimForm({ ...editClaimForm, claimedPhoneNumber: e.target.value })}
+                            className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
+                            placeholder="Enter phone number"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
+                            Start Month
+                          </label>
+                          <select
+                            value={editClaimForm.startMonth}
+                            onChange={(e) => setEditClaimForm({ ...editClaimForm, startMonth: e.target.value })}
+                            className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
+                          >
+                            <option value="">Select month</option>
+                            <option value="January">January</option>
+                            <option value="February">February</option>
+                            <option value="March">March</option>
+                            <option value="April">April</option>
+                            <option value="May">May</option>
+                            <option value="June">June</option>
+                            <option value="July">July</option>
+                            <option value="August">August</option>
+                            <option value="September">September</option>
+                            <option value="October">October</option>
+                            <option value="November">November</option>
+                            <option value="December">December</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
+                            Start Year
+                          </label>
+                          <input
+                            type="text"
+                            value={editClaimForm.startYear}
+                            onChange={(e) => setEditClaimForm({ ...editClaimForm, startYear: e.target.value })}
+                            className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
+                            placeholder="Enter year"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
+                            Previous Plan
+                          </label>
+                          <select
+                            value={editClaimForm.previousMembershipPlanType}
+                            onChange={(e) => setEditClaimForm({ ...editClaimForm, previousMembershipPlanType: e.target.value })}
+                            className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
+                          >
+                            <option value="">Select plan</option>
+                            <option value="1 Year">1 Year</option>
+                            <option value="6 Months">6 Months</option>
+                            <option value="3 Months">3 Months</option>
+                            <option value="Monthly">Monthly</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
