@@ -371,6 +371,9 @@ useEffect(() => {
           ? {}
           : { claimedPhone: undefined, startMonth: undefined, startYear: undefined, previousPlan: undefined }),
       };
+
+      console.log("Form Data:", payload);
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
