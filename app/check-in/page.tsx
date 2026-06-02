@@ -327,17 +327,15 @@ const waitForDoorCommandResult = async (
       });
     } catch (networkError) {
       // Network failed - queue request for offline sync
-      if (!isOnline) {
-        await queueRequest(endpoint, "POST", headers, body);
-        setMessage("Offline: Syncing as soon as connection is restored.");
-        setSuccessState(true);
-        setRedirecting(true);
-        redirectTimeoutRef.current = setTimeout(() => {
-          router.push("/dashboard");
-        }, 3000);
-        return;
-      }
-      throw networkError;
+      console.log("Network error, queuing request for offline sync");
+      await queueRequest(endpoint, "POST", headers, body);
+      setMessage("Offline: Scan saved. Will sync when connection is restored.");
+      setSuccessState(true);
+      setRedirecting(true);
+      redirectTimeoutRef.current = setTimeout(() => {
+        router.push("/dashboard");
+      }, 3000);
+      return;
     }
 
     const data = await res.json();
@@ -547,7 +545,13 @@ setDoorUnlockStatus("");
                 </span>
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-gray-400 sm:text-base">
-                Scan the official ENTRY QR to access the gym, record attendance, and update membership usage.
+                {!isOnline && (
+                  <span className="inline-flex items-center gap-2 rounded-full border border-yellow-500/30 bg-yellow-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-yellow-400">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-400" />
+                    Offline - Scans will sync when back online
+                  </span>
+                )}
+                {" Scan the official ENTRY QR to access the gym, record attendance, and update membership usage."}
               </p>
             </div>
 
@@ -613,9 +617,14 @@ setDoorUnlockStatus("");
                   {!scannerStarted && !redirecting ? (
                     <button
                       onClick={startScanner}
-                      className="w-full rounded-2xl bg-red-600 px-6 py-4 text-sm font-bold uppercase tracking-[0.2em] text-white shadow-[0_0_30px_rgba(255,0,0,0.4)] transition duration-300 hover:scale-[1.01] hover:bg-red-700"
+                      disabled={!isOnline && !cameraPreWarmed}
+                      className={`w-full rounded-2xl px-6 py-4 text-sm font-bold uppercase tracking-[0.2em] text-white shadow-[0_0_30px_rgba(255,0,0,0.4)] transition duration-300 hover:scale-[1.01] ${
+                        !isOnline && !cameraPreWarmed
+                          ? "cursor-not-allowed bg-gray-600 opacity-50"
+                          : "bg-red-600 hover:bg-red-700"
+                      }`}
                     >
-                      Scan QR
+                      {isOnline ? "Scan QR" : "Scan QR (Offline Mode)"}
                     </button>
                   ) : (
                     <button
