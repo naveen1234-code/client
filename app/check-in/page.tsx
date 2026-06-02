@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
 import { getToken } from "@/lib/auth";
+import { initOfflineQueue, queueRequest, retryQueuedRequests } from "@/lib/offlineQueue";
 
 type UserType = {
   name: string;
@@ -72,6 +73,9 @@ const [doorUnlockStatus, setDoorUnlockStatus] = useState<string>("");
 const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [cameraPreWarmed, setCameraPreWarmed] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [syncingOffline, setSyncingOffline] = useState(false);
+  const [scanPulse, setScanPulse] = useState(false);
 
   const fetchUser = async () => {
     const token = getToken();
@@ -178,6 +182,40 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     preWarmCamera();
   }, []);
 
+  // Initialize offline queue and monitor network status
+  useEffect(() => {
+    const initOffline = async () => {
+      await initOfflineQueue();
+      
+      // Check initial online status
+      setIsOnline(navigator.onLine);
+      
+      // Monitor online/offline events
+      const handleOnline = async () => {
+        setIsOnline(true);
+        setSyncingOffline(true);
+        console.log("Network restored, syncing offline requests...");
+        await retryQueuedRequests();
+        setSyncingOffline(false);
+      };
+      
+      const handleOffline = () => {
+        setIsOnline(false);
+        console.log("Network lost, requests will be queued");
+      };
+      
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+      
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    };
+    
+    initOffline();
+  }, []);
+
   const sleep = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 
@@ -269,17 +307,38 @@ const waitForDoorCommandResult = async (
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-out`;
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        scannedQrValue: scannedValue,
-        accessPoint: "main-door",
-      }),
+    const body = JSON.stringify({
+      scannedQrValue: scannedValue,
+      accessPoint: "main-door",
     });
+
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    };
+
+    // Try network request first
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body,
+      });
+    } catch (networkError) {
+      // Network failed - queue request for offline sync
+      if (!isOnline) {
+        await queueRequest(endpoint, "POST", headers, body);
+        setMessage("Offline: Syncing as soon as connection is restored.");
+        setSuccessState(true);
+        setRedirecting(true);
+        redirectTimeoutRef.current = setTimeout(() => {
+          router.push("/dashboard");
+        }, 3000);
+        return;
+      }
+      throw networkError;
+    }
 
     const data = await res.json();
 
@@ -397,6 +456,10 @@ setDoorUnlockStatus("");
             // Optimistic UI - show verifying status immediately
             setVerifying(true);
             setMessage("Verifying...");
+            
+            // UI pulse effect for visual confirmation
+            setScanPulse(true);
+            setTimeout(() => setScanPulse(false), 300);
             
             await stopScanner();
             await handleAccessAction(trimmedText, "entry");
