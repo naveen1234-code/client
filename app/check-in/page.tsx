@@ -56,6 +56,7 @@ export default function CheckInPage() {
   const scanLockRef = useRef(false);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
 
   const [user, setUser] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -166,6 +167,9 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
             video: { facingMode: "environment" } 
           });
           
+          // Store stream in ref for cleanup
+          cameraStreamRef.current = stream;
+          
           // Stop the stream immediately to release camera but keep permission granted
           stream.getTracks().forEach(track => track.stop());
           
@@ -180,6 +184,14 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     };
 
     preWarmCamera();
+
+    // Cleanup: Ensure any active stream tracks are stopped
+    return () => {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(track => track.stop());
+        cameraStreamRef.current = null;
+      }
+    };
   }, []);
 
   // Initialize offline queue and monitor network status
@@ -283,6 +295,12 @@ const waitForDoorCommandResult = async (
     } finally {
       scannerRunningRef.current = false;
       setScannerStarted(false);
+      
+      // Ensure any camera stream tracks are stopped
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(track => track.stop());
+        cameraStreamRef.current = null;
+      }
     }
   };
 
@@ -484,7 +502,17 @@ setDoorUnlockStatus("");
     return () => {
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
       if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
-      stopScanner();
+      
+      // Stop scanner and clean up camera stream
+      stopScanner().catch(err => {
+        console.log("Scanner cleanup error on unmount:", err);
+      });
+      
+      // Ensure camera stream is fully stopped
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(track => track.stop());
+        cameraStreamRef.current = null;
+      }
     };
   }, []);
 
