@@ -60,6 +60,7 @@ export default function CheckInPage() {
   const [mode, setMode] = useState<AccessMode>("entry");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [rawScanData, setRawScanData] = useState("");
   const [doorSessionId, setDoorSessionId] = useState<string | null>(null);
   const [doorCommandId, setDoorCommandId] = useState<string | null>(null);
 const [doorUnlockStatus, setDoorUnlockStatus] = useState<string>("");
@@ -312,6 +313,7 @@ const waitForDoorCommandResult = async (
     try {
       setError("");
       setMessage("");
+      setRawScanData("");
       setSuccessState(false);
       setRedirecting(false);
       setDoorSessionId(null);
@@ -339,22 +341,29 @@ setDoorUnlockStatus("");
         async (decodedText) => {
           if (scanLockRef.current) return;
 
+          // Expose raw data for diagnostic
+          setRawScanData(`RAW DATA: ->${decodedText}<-`);
+          console.log("QR Scanner Raw Output:", decodedText, "Type:", typeof decodedText);
+
           // Validate exact string matching for physical QR codes
           const expectedValue = mode === "entry" ? "GYM_RAVANA_ENTRY" : "GYM_RAVANA_EXIT";
           
-          if (decodedText !== expectedValue) {
-            setError(`Invalid QR code. Please scan the ${mode === "entry" ? "ENTRY" : "EXIT"} QR code.`);
+          // Robust validation: trim whitespace, check exact match
+          const trimmedText = decodedText.trim();
+          
+          if (trimmedText !== expectedValue) {
+            setError(`Invalid QR code. Expected: ${expectedValue}, Got: ->${decodedText}<-`);
             scanLockRef.current = true;
             setTimeout(() => {
               scanLockRef.current = false;
-            }, 2000);
+            }, 3000);
             return;
           }
 
           scanLockRef.current = true;
 
           await stopScanner();
-          await handleAccessAction(decodedText);
+          await handleAccessAction(trimmedText);
         },
         () => {}
       );
@@ -393,6 +402,7 @@ setDoorUnlockStatus("");
     setMode(newMode);
     setError("");
     setMessage("");
+    setRawScanData("");
     setSuccessState(false);
     setRedirecting(false);
     setDoorSessionId(null);
@@ -543,6 +553,12 @@ setDoorUnlockStatus("");
                   <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-green-300">
                     Scan locked. Processing successful access...
                   </p>
+                )}
+
+                {rawScanData && (
+                  <div className="mt-3 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-xs font-mono text-yellow-300">
+                    {rawScanData}
+                  </div>
                 )}
 
                 {(message || error) && (
