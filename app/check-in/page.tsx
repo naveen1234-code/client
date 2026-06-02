@@ -250,6 +250,17 @@ const waitForDoorCommandResult = async (
     const data = await res.json();
 
     if (!res.ok) {
+      // Treat "Already checked in today" as success
+      if (data.message && data.message.includes("Already checked in")) {
+        setMessage("Welcome back! You've already checked in today.");
+        setSuccessState(true);
+        setRedirecting(true);
+        redirectTimeoutRef.current = setTimeout(() => {
+          router.push("/dashboard");
+        }, 2200);
+        return;
+      }
+
       setError(data.message || `${action === "entry" ? "Entry" : "Exit"} failed`);
 
       unlockTimeoutRef.current = setTimeout(() => {
@@ -281,10 +292,7 @@ const waitForDoorCommandResult = async (
     }
 
     setMessage(
-      finalResult.message ||
-        (mode === "entry"
-          ? "Door unlocked successfully. Entry recorded ✅"
-          : "Door unlocked successfully. Exit recorded ✅")
+      finalResult.message || "Check-in successful!"
     );
 
     setSuccessState(true);
@@ -295,7 +303,7 @@ const waitForDoorCommandResult = async (
     }, 2200);
   } catch (err: any) {
     setError(
-      err?.message || "API Connection Failed. Please try again."
+      err?.message || "Invalid code, please scan the Gym Entrance QR."
     );
 
     setSuccessState(false);
@@ -340,17 +348,13 @@ setDoorUnlockStatus("");
 
           const trimmedText = decodedText.trim();
 
-          // Direct conditional logic based on QR content
+          // Entry-only logic - only accept ENTRY QR
           if (trimmedText === "GYM_RAVANA_ENTRY") {
             scanLockRef.current = true;
             await stopScanner();
             await handleAccessAction(trimmedText, "entry");
-          } else if (trimmedText === "GYM_RAVANA_EXIT") {
-            scanLockRef.current = true;
-            await stopScanner();
-            await handleAccessAction(trimmedText, "exit");
           } else {
-            setError("Unrecognized QR Code");
+            setError("Invalid code, please scan the Gym Entrance QR.");
             scanLockRef.current = true;
             setTimeout(() => {
               scanLockRef.current = false;
@@ -427,15 +431,13 @@ setDoorUnlockStatus("");
                 Gym Ravana Access System
               </p>
               <h1 className="text-3xl font-black uppercase tracking-tight text-white sm:text-5xl">
-                {mode === "entry" ? "Scan To Check In" : "Scan To Check Out"}
+                Scan QR
                 <span className="block text-red-500">
-                  {mode === "entry" ? "Enter. Train." : "Exit. Safe Return."}
+                  Enter. Train.
                 </span>
               </h1>
               <p className="mt-3 max-w-2xl text-sm text-gray-400 sm:text-base">
-                {mode === "entry"
-                  ? "Scan the official ENTRY QR to access the gym, record attendance, and update membership usage."
-                  : "Scan the official EXIT QR when leaving the gym so the system knows you are no longer inside."}
+                Scan the official ENTRY QR to access the gym, record attendance, and update membership usage.
               </p>
             </div>
 
@@ -455,29 +457,6 @@ setDoorUnlockStatus("");
 
           </div>
 
-          <div className="mb-8 flex flex-col gap-3 rounded-[28px] border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur sm:flex-row">
-            <button
-              onClick={() => handleSwitchMode("entry")}
-              className={`w-full rounded-2xl px-5 py-4 text-sm font-bold uppercase tracking-[0.2em] transition duration-300 ${
-                mode === "entry"
-                  ? "bg-red-600 text-white shadow-[0_0_30px_rgba(255,0,0,0.35)]"
-                  : "border border-white/10 bg-white/5 text-white hover:border-red-500/30 hover:bg-red-500/10"
-              }`}
-            >
-              Entry Mode
-            </button>
-
-            <button
-              onClick={() => handleSwitchMode("exit")}
-              className={`w-full rounded-2xl px-5 py-4 text-sm font-bold uppercase tracking-[0.2em] transition duration-300 ${
-                mode === "exit"
-                  ? "bg-red-600 text-white shadow-[0_0_30px_rgba(255,0,0,0.35)]"
-                  : "border border-white/10 bg-white/5 text-white hover:border-red-500/30 hover:bg-red-500/10"
-              }`}
-            >
-              Exit Mode
-            </button>
-          </div>
 
           <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
             <section className="rounded-[30px] border border-white/10 bg-gradient-to-br from-white/8 to-white/5 p-5 shadow-2xl backdrop-blur sm:p-7">
@@ -487,9 +466,7 @@ setDoorUnlockStatus("");
                     Live QR Scanner
                   </h2>
                   <p className="mt-2 text-sm text-gray-400">
-                    {mode === "entry"
-                      ? "Open the camera, point it at the ENTRY QR, and your access will process automatically."
-                      : "Open the camera, point it at the EXIT QR, and your exit will process automatically."}
+                    Open the camera, point it at the ENTRY QR, and your access will process automatically.
                   </p>
                 </div>
 
@@ -528,7 +505,7 @@ setDoorUnlockStatus("");
                       onClick={startScanner}
                       className="w-full rounded-2xl bg-red-600 px-6 py-4 text-sm font-bold uppercase tracking-[0.2em] text-white shadow-[0_0_30px_rgba(255,0,0,0.4)] transition duration-300 hover:scale-[1.01] hover:bg-red-700"
                     >
-                      {mode === "entry" ? "Start Entry Scanner" : "Start Exit Scanner"}
+                      Scan QR
                     </button>
                   ) : (
                     <button
@@ -566,7 +543,7 @@ setDoorUnlockStatus("");
                 {successState && !error && (
                   <div className="mt-5 rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-4 text-green-300 shadow-[0_0_40px_rgba(34,197,94,0.12)]">
                     <p className="text-lg font-bold uppercase tracking-[0.18em]">
-                      {message.includes("Entry") ? "Entry Approved ✅" : "Exit Approved ✅"}
+                      {message.includes("already checked in") ? "Welcome Back ✅" : "Check-in Successful ✅"}
                     </p>
 
                     {doorSessionId && (
@@ -730,9 +707,7 @@ setDoorUnlockStatus("");
                   Access Rule
                 </p>
                 <p className="mt-3 text-sm leading-7 text-gray-300">
-                  {mode === "entry"
-  ? "Entry only works with an active membership, correct ENTRY QR, and if you are not already inside. A valid entry records attendance and reduces one remaining day only once per day."
-  : "Exit only works with the correct EXIT QR and only if you are currently marked as inside the gym."}
+                  Entry only works with an active membership, correct ENTRY QR, and if you are not already inside. A valid entry records attendance and reduces one remaining day only once per day.
                 </p>
               </div>
             </aside>
