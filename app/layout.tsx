@@ -44,8 +44,14 @@ export default function RootLayout({
     {`
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("/sw.js").catch(function (err) {
-            console.log("Service worker registration failed:", err);
+          navigator.serviceWorker.getRegistrations().then(function (registrations) {
+            registrations.forEach(function (registration) {
+              registration.unregister();
+            });
+          }).then(function () {
+            navigator.serviceWorker.register("/sw.js").catch(function (err) {
+              console.log("Service worker registration failed:", err);
+            });
           });
         });
       }

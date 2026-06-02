@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 import PageTransition from "@/components/PageTransition";
 
 type BookingType = {
@@ -29,7 +30,7 @@ export default function BookingsPage() {
   const [error, setError] = useState("");
 
   const fetchBookings = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!token) {
       router.push("/login");
@@ -74,7 +75,7 @@ export default function BookingsPage() {
   };
 
   const handleCreateBooking = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!token) {
       router.push("/login");

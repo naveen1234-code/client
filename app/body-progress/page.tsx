@@ -3,6 +3,7 @@
 import PageTransition from "@/components/PageTransition";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 import {
   getBodyProgressMe,
   getBodyProgressStatusMe,
@@ -95,7 +96,7 @@ export default function BodyProgressPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) {
       router.push("/login");
       return;
@@ -437,4 +438,5 @@ export default function BodyProgressPage() {
     </PageTransition>
   );
 }
+
 

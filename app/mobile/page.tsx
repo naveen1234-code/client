@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 import PageTransition from "@/components/PageTransition";
 
 type UserType = {
@@ -99,7 +100,7 @@ export default function MobileDashboardPage() {
   }, []);
 
   const fetchUserData = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!token) {
       router.push("/login");
@@ -117,6 +118,7 @@ export default function MobileDashboardPage() {
 
       if (!userRes.ok) {
         localStorage.removeItem("token");
+        localStorage.removeItem("userRole");
         router.push("/login");
         return;
       }
@@ -184,7 +186,7 @@ export default function MobileDashboardPage() {
   };
 
   const handleSaveProfile = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -258,7 +260,7 @@ export default function MobileDashboardPage() {
   };
 
   const handleSaveFullMeasurement = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -375,7 +377,7 @@ export default function MobileDashboardPage() {
   };
 
   const handleSaveTraining = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {

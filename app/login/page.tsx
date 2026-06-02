@@ -41,7 +41,11 @@ export default function LoginPage() {
       if (!res.ok) {
         setMessage(data.message || "Login failed");
       } else {
-        localStorage.setItem("token", data.token);
+        const authData = {
+          token: data.token,
+          expiresAt: Date.now() + 31536000000, // 1 year in milliseconds
+        };
+        localStorage.setItem("token", JSON.stringify(authData));
         localStorage.setItem("userRole", data.user?.role || "member");
 setMessage("Login successful ✅ Redirecting...");
 

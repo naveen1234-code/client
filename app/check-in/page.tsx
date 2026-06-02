@@ -4,6 +4,7 @@ import PageTransition from "@/components/PageTransition";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Html5Qrcode } from "html5-qrcode";
+import { getToken } from "@/lib/auth";
 
 type UserType = {
   name: string;
@@ -217,7 +218,7 @@ const waitForDoorCommandResult = async (
   };
 
   const handleAccessAction = async (scannedValue: string, action: "entry" | "exit") => {
-  const token = localStorage.getItem("token");
+  const token = getToken();
 
   if (!token) {
     router.push("/login");

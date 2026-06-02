@@ -4,6 +4,7 @@ import PageTransition from "@/components/PageTransition";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect as useEffectClient } from "react";
+import { getToken } from "@/lib/auth";
 
 type UserType = {
   name: string;
@@ -71,7 +72,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      const token = localStorage.getItem("token");
+      const token = getToken();
 
       if (!token) {
         router.push("/login");
@@ -131,6 +132,7 @@ export default function DashboardPage() {
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
     router.push("/login");
   };
 
@@ -161,7 +163,7 @@ export default function DashboardPage() {
   };
 
   const handleMarkAllNotificationsRead = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {

@@ -72,6 +72,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
     setIsLoggedIn(false);
     setMobileMenuOpen(false);
     router.push("/login");
