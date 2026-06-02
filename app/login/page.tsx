@@ -53,7 +53,7 @@ setTimeout(() => {
   if (data.user?.role === "admin") {
     router.push("/admin");
   } else {
-    router.push("/mobile");
+    router.push("/access");
   }
 }, 900);
       }

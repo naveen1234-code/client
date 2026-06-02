@@ -87,7 +87,7 @@ export default function PaymentsPage() {
               </button>
 
               <button
-                onClick={() => router.push("/mobile")}
+                onClick={() => router.push("/access")}
                 className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-bold uppercase tracking-[0.18em] text-white transition duration-300 hover:border-red-500/30 hover:bg-red-500/10"
               >
                 Open Mobile App

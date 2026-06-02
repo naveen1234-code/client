@@ -4,5 +4,17 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/mobile",
+      "destination": "/access",
+      "permanent": true
+    },
+    {
+      "source": "/mobile/:path*",
+      "destination": "/access/:path*",
+      "permanent": true
+    }
   ]
 }
