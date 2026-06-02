@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageTransition from "@/components/PageTransition";
+import { getToken } from "@/lib/auth";
 
 type UserType = {
   _id: string;
@@ -299,7 +300,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   };
   useEffect(() => {
     const fetchAdminData = async () => {
-      const token = localStorage.getItem("token");
+      const token = getToken();
 
       if (!token) {
         router.push("/login");
@@ -316,6 +317,8 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         const meData = await meRes.json();
 
         if (!meRes.ok) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("userRole");
           router.push("/login");
           return;
         }

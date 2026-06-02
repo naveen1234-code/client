@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import PageTransition from "@/components/PageTransition";
+import { getToken } from "@/lib/auth";
 
 export default function AdminAccessPage() {
   const router = useRouter();
@@ -11,7 +12,7 @@ export default function AdminAccessPage() {
 
   useEffect(() => {
     const checkAdmin = async () => {
-      const token = localStorage.getItem("token");
+      const token = getToken();
 
       if (!token) {
         router.replace("/login");
@@ -29,6 +30,7 @@ export default function AdminAccessPage() {
 
         if (!res.ok) {
           localStorage.removeItem("token");
+          localStorage.removeItem("userRole");
           router.replace("/login");
           return;
         }

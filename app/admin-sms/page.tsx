@@ -3,6 +3,7 @@
 import PageTransition from "@/components/PageTransition";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 
 type SmsResultType = {
   success: boolean;
@@ -32,7 +33,7 @@ export default function AdminSmsPage() {
 
   useEffect(() => {
     const verifyAdmin = async () => {
-      const token = localStorage.getItem("token");
+      const token = getToken();
 
       if (!token) {
         router.push("/login");
@@ -51,6 +52,7 @@ export default function AdminSmsPage() {
         if (!res.ok) {
           if (res.status === 401 || res.status === 403) {
             localStorage.removeItem("token");
+            localStorage.removeItem("userRole");
             router.push("/login");
             return;
           }

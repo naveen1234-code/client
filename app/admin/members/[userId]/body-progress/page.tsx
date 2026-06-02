@@ -3,6 +3,7 @@
 import PageTransition from "@/components/PageTransition";
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { getToken } from "@/lib/auth";
 import {
   getBodyProgressStatusUser,
   getBodyProgressUser,
@@ -102,7 +103,7 @@ export default function AdminMemberBodyProgressPage() {
   };
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) {
       router.push("/login");
       return;
