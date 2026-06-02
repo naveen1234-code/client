@@ -295,8 +295,7 @@ const waitForDoorCommandResult = async (
     }, 2200);
   } catch (err: any) {
     setError(
-      err?.message ||
-        `Unlock failed during ${action}. Please scan again.`
+      err?.message || "API Connection Failed. Please try again."
     );
 
     setSuccessState(false);
