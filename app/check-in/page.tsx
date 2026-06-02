@@ -334,9 +334,22 @@ setDoorUnlockStatus("");
         {
           fps: 10,
           qrbox: { width: 260, height: 260 },
+          aspectRatio: 1.0,
         },
         async (decodedText) => {
           if (scanLockRef.current) return;
+
+          // Validate exact string matching for physical QR codes
+          const expectedValue = mode === "entry" ? "GYM_RAVANA_ENTRY" : "GYM_RAVANA_EXIT";
+          
+          if (decodedText !== expectedValue) {
+            setError(`Invalid QR code. Please scan the ${mode === "entry" ? "ENTRY" : "EXIT"} QR code.`);
+            scanLockRef.current = true;
+            setTimeout(() => {
+              scanLockRef.current = false;
+            }, 2000);
+            return;
+          }
 
           scanLockRef.current = true;
 
