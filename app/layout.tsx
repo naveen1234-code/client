@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Oswald } from "next/font/google";
 import "./globals.css";
-import Script from "next/script";
 import SystemShutdownGuard from "@/components/SystemShutdownGuard";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -40,23 +40,7 @@ export default function RootLayout({
   </head>
       <body className={`${inter.variable} ${oswald.variable} font-sans bg-black text-white`}>
   <SystemShutdownGuard>{children}</SystemShutdownGuard>
-  <Script id="register-sw" strategy="afterInteractive">
-    {`
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          navigator.serviceWorker.getRegistrations().then(function (registrations) {
-            registrations.forEach(function (registration) {
-              registration.unregister();
-            });
-          }).then(function () {
-            navigator.serviceWorker.register("/sw.js").catch(function (err) {
-              console.log("Service worker registration failed:", err);
-            });
-          });
-        });
-      }
-    `}
-  </Script>
+  <ServiceWorkerRegister />
 </body>
     </html>
   );
