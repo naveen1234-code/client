@@ -60,7 +60,6 @@ export default function CheckInPage() {
   const [mode, setMode] = useState<AccessMode>("entry");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [rawScanData, setRawScanData] = useState("");
   const [doorSessionId, setDoorSessionId] = useState<string | null>(null);
   const [doorCommandId, setDoorCommandId] = useState<string | null>(null);
 const [doorUnlockStatus, setDoorUnlockStatus] = useState<string>("");
@@ -217,7 +216,7 @@ const waitForDoorCommandResult = async (
     }
   };
 
-  const handleAccessAction = async (scannedValue: string) => {
+  const handleAccessAction = async (scannedValue: string, action: "entry" | "exit") => {
   const token = localStorage.getItem("token");
 
   if (!token) {
@@ -232,7 +231,7 @@ const waitForDoorCommandResult = async (
     setDoorUnlockStatus("");
 
     const endpoint =
-      mode === "entry"
+      action === "entry"
         ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-in`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/auth/check-out`;
 
@@ -251,7 +250,7 @@ const waitForDoorCommandResult = async (
     const data = await res.json();
 
     if (!res.ok) {
-      setError(data.message || `${mode === "entry" ? "Entry" : "Exit"} failed`);
+      setError(data.message || `${action === "entry" ? "Entry" : "Exit"} failed`);
 
       unlockTimeoutRef.current = setTimeout(() => {
         scanLockRef.current = false;
@@ -297,7 +296,7 @@ const waitForDoorCommandResult = async (
   } catch (err: any) {
     setError(
       err?.message ||
-        `Unlock failed during ${mode}. Please scan again.`
+        `Unlock failed during ${action}. Please scan again.`
     );
 
     setSuccessState(false);
@@ -313,7 +312,6 @@ const waitForDoorCommandResult = async (
     try {
       setError("");
       setMessage("");
-      setRawScanData("");
       setSuccessState(false);
       setRedirecting(false);
       setDoorSessionId(null);
@@ -341,29 +339,24 @@ setDoorUnlockStatus("");
         async (decodedText) => {
           if (scanLockRef.current) return;
 
-          // Expose raw data for diagnostic
-          setRawScanData(`RAW DATA: ->${decodedText}<-`);
-          console.log("QR Scanner Raw Output:", decodedText, "Type:", typeof decodedText);
-
-          // Validate exact string matching for physical QR codes
-          const expectedValue = mode === "entry" ? "GYM_RAVANA_ENTRY" : "GYM_RAVANA_EXIT";
-          
-          // Robust validation: trim whitespace, check exact match
           const trimmedText = decodedText.trim();
-          
-          if (trimmedText !== expectedValue) {
-            setError(`Invalid QR code. Expected: ${expectedValue}, Got: ->${decodedText}<-`);
+
+          // Direct conditional logic based on QR content
+          if (trimmedText === "GYM_RAVANA_ENTRY") {
+            scanLockRef.current = true;
+            await stopScanner();
+            await handleAccessAction(trimmedText, "entry");
+          } else if (trimmedText === "GYM_RAVANA_EXIT") {
+            scanLockRef.current = true;
+            await stopScanner();
+            await handleAccessAction(trimmedText, "exit");
+          } else {
+            setError("Unrecognized QR Code");
             scanLockRef.current = true;
             setTimeout(() => {
               scanLockRef.current = false;
-            }, 3000);
-            return;
+            }, 2000);
           }
-
-          scanLockRef.current = true;
-
-          await stopScanner();
-          await handleAccessAction(trimmedText);
         },
         () => {}
       );
@@ -402,7 +395,6 @@ setDoorUnlockStatus("");
     setMode(newMode);
     setError("");
     setMessage("");
-    setRawScanData("");
     setSuccessState(false);
     setRedirecting(false);
     setDoorSessionId(null);
@@ -555,12 +547,6 @@ setDoorUnlockStatus("");
                   </p>
                 )}
 
-                {rawScanData && (
-                  <div className="mt-3 rounded-2xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-3 text-xs font-mono text-yellow-300">
-                    {rawScanData}
-                  </div>
-                )}
-
                 {(message || error) && (
                   <div
                     className={`mt-5 rounded-2xl border px-4 py-4 transition-all duration-500 ${
@@ -581,7 +567,7 @@ setDoorUnlockStatus("");
                 {successState && !error && (
                   <div className="mt-5 rounded-2xl border border-green-500/20 bg-green-500/10 px-4 py-4 text-green-300 shadow-[0_0_40px_rgba(34,197,94,0.12)]">
                     <p className="text-lg font-bold uppercase tracking-[0.18em]">
-                      {mode === "entry" ? "Entry Approved ✅" : "Exit Approved ✅"}
+                      {message.includes("Entry") ? "Entry Approved ✅" : "Exit Approved ✅"}
                     </p>
 
                     {doorSessionId && (
