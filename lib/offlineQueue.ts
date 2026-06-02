@@ -109,6 +109,16 @@ export const retryQueuedRequests = async (): Promise<void> => {
       console.error("Failed to sync offline request:", request.id, error);
       request.retryCount++;
       
+      // Update retry count in IndexedDB
+      try {
+        if (!db) await initOfflineQueue();
+        const transaction = db!.transaction([STORE_NAME], "readwrite");
+        const store = transaction.objectStore(STORE_NAME);
+        store.put(request);
+      } catch (updateError) {
+        console.error("Failed to update retry count in IndexedDB:", request.id, updateError);
+      }
+      
       // Remove requests that have failed too many times
       if (request.retryCount >= 5) {
         await removeQueuedRequest(request.id);

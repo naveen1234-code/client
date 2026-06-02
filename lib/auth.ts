@@ -3,6 +3,19 @@ export interface AuthData {
   expiresAt: number;
 }
 
+// Token refresh locking mechanism
+let isRefreshing = false;
+let refreshSubscribers: Array<(token: string | null) => void> = [];
+
+const subscribeTokenRefresh = (callback: (token: string | null) => void) => {
+  refreshSubscribers.push(callback);
+};
+
+const onTokenRefreshed = (token: string | null) => {
+  refreshSubscribers.forEach(callback => callback(token));
+  refreshSubscribers = [];
+};
+
 export const getToken = (): string | null => {
   try {
     const stored = localStorage.getItem("token");
@@ -50,4 +63,56 @@ export const clearToken = (): void => {
 
 export const isTokenValid = (): boolean => {
   return getToken() !== null;
+};
+
+// Authenticated fetch with token refresh locking
+export const authFetch = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  const token = getToken();
+  
+  if (!token) {
+    throw new Error("No token available");
+  }
+
+  // Add authorization header
+  const headers = {
+    ...options.headers,
+    Authorization: `Bearer ${token}`,
+  };
+
+  try {
+    const response = await fetch(url, { ...options, headers });
+    
+    // If 401, token might be expired
+    if (response.status === 401 && !isRefreshing) {
+      isRefreshing = true;
+      
+      try {
+        // Clear expired token
+        clearToken();
+        onTokenRefreshed(null);
+        throw new Error("Token expired");
+      } finally {
+        isRefreshing = false;
+      }
+    }
+    
+    return response;
+  } catch (error) {
+    // If refresh is in progress, wait for it
+    if (isRefreshing) {
+      return new Promise((resolve, reject) => {
+        subscribeTokenRefresh((token) => {
+          if (token) {
+            authFetch(url, options).then(resolve).catch(reject);
+          } else {
+            reject(new Error("Token refresh failed"));
+          }
+        });
+      });
+    }
+    throw error;
+  }
 };

@@ -128,7 +128,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [router]);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
