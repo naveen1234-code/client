@@ -1,12 +1,12 @@
-const CACHE_NAME = "gym-ravana-v2";
-const STATIC_CACHE = "gym-ravana-static-v2";
-const API_CACHE = "gym-ravana-api-v2";
+const CACHE_NAME = "gym-ravana-v3";
+const STATIC_CACHE = "gym-ravana-static-v3";
+const API_CACHE = "gym-ravana-api-v3";
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
   "/",
-  "/index.html",
   "/access",
+  "/~offline",
   "/check-in",
   "/login",
   "/dashboard",
@@ -48,7 +48,26 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (event.request.method !== "GET") return;
 
-  // Cache-first for static assets with index.html fallback
+  // Cache Next.js static assets aggressively
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(
+      caches.open(STATIC_CACHE).then((cache) => {
+        return cache.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          return fetch(event.request).then((networkResponse) => {
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          });
+        });
+      })
+    );
+    return;
+  }
+
+  // Cache-first for same-origin requests with offline fallback
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.open(STATIC_CACHE).then((cache) => {
@@ -64,9 +83,9 @@ self.addEventListener("fetch", (event) => {
               return networkResponse;
             })
             .catch(() => {
-              // Fallback to index.html for navigation requests
+              // Fallback to offline page for navigation requests
               if (event.request.mode === "navigate") {
-                return cache.match("/index.html");
+                return cache.match("/~offline");
               }
               throw new Error("Network request failed and no cache available");
             });
