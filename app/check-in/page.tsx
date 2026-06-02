@@ -70,6 +70,8 @@ const [doorUnlockStatus, setDoorUnlockStatus] = useState<string>("");
   const [scannerPulse, setScannerPulse] = useState(false);
   const [showInstallHelp, setShowInstallHelp] = useState(false);
 const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [cameraPreWarmed, setCameraPreWarmed] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   const fetchUser = async () => {
     const token = localStorage.getItem("token");
@@ -146,6 +148,32 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
       if (pulseInterval) clearInterval(pulseInterval);
     };
   }, [scannerStarted]);
+
+  // Background camera pre-warm on app load
+  useEffect(() => {
+    const preWarmCamera = async () => {
+      try {
+        if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+          // Request camera permission and initialize stream in background
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" } 
+          });
+          
+          // Stop the stream immediately to release camera but keep permission granted
+          stream.getTracks().forEach(track => track.stop());
+          
+          setCameraPreWarmed(true);
+          console.log("Camera pre-warmed successfully");
+        }
+      } catch (err) {
+        console.log("Camera pre-warm failed:", err);
+        // Don't show error, just mark as not pre-warmed
+        setCameraPreWarmed(false);
+      }
+    };
+
+    preWarmCamera();
+  }, []);
 
   const sleep = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms));
@@ -226,6 +254,8 @@ const waitForDoorCommandResult = async (
   }
 
   try {
+    // Clear verifying state when network request starts
+    setVerifying(false);
     setMessage("");
     setError("");
     setDoorCommandId(null);
@@ -322,6 +352,7 @@ const waitForDoorCommandResult = async (
       setMessage("");
       setSuccessState(false);
       setRedirecting(false);
+      setVerifying(false);
       setDoorSessionId(null);
       setDoorCommandId(null);
 setDoorUnlockStatus("");
@@ -352,6 +383,16 @@ setDoorUnlockStatus("");
           // Entry-only logic - only accept ENTRY QR
           if (trimmedText === "GYM_RAVANA_ENTRY") {
             scanLockRef.current = true;
+            
+            // Haptic feedback - vibrate immediately on successful decode
+            if (typeof navigator !== "undefined" && navigator.vibrate) {
+              navigator.vibrate(200);
+            }
+            
+            // Optimistic UI - show verifying status immediately
+            setVerifying(true);
+            setMessage("Verifying...");
+            
             await stopScanner();
             await handleAccessAction(trimmedText, "entry");
           } else {
