@@ -1,10 +1,11 @@
-const CACHE_NAME = "gym-ravana-v1";
-const STATIC_CACHE = "gym-ravana-static-v1";
-const API_CACHE = "gym-ravana-api-v1";
+const CACHE_NAME = "gym-ravana-v2";
+const STATIC_CACHE = "gym-ravana-static-v2";
+const API_CACHE = "gym-ravana-api-v2";
 
 // Static assets to cache on install
 const STATIC_ASSETS = [
   "/",
+  "/index.html",
   "/access",
   "/check-in",
   "/login",
@@ -47,7 +48,7 @@ self.addEventListener("fetch", (event) => {
   // Skip non-GET requests
   if (event.request.method !== "GET") return;
 
-  // Cache-first for static assets
+  // Cache-first for static assets with index.html fallback
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.open(STATIC_CACHE).then((cache) => {
@@ -56,11 +57,19 @@ self.addEventListener("fetch", (event) => {
             return cachedResponse;
           }
 
-          return fetch(event.request).then((networkResponse) => {
-            // Cache the fetched response
-            cache.put(event.request, networkResponse.clone());
-            return networkResponse;
-          });
+          return fetch(event.request)
+            .then((networkResponse) => {
+              // Cache the fetched response
+              cache.put(event.request, networkResponse.clone());
+              return networkResponse;
+            })
+            .catch(() => {
+              // Fallback to index.html for navigation requests
+              if (event.request.mode === "navigate") {
+                return cache.match("/index.html");
+              }
+              throw new Error("Network request failed and no cache available");
+            });
         });
       })
     );
