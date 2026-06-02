@@ -27,8 +27,12 @@ export const getToken = (): string | null => {
       
       // Check if token has expired
       if (Date.now() > authData.expiresAt) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("userRole");
+        try {
+          localStorage.removeItem("token");
+          localStorage.removeItem("userRole");
+        } catch (storageError) {
+          console.warn("Failed to clear expired token from localStorage:", storageError);
+        }
         return null;
       }
       
@@ -40,7 +44,11 @@ export const getToken = (): string | null => {
       token: stored,
       expiresAt: Date.now() + 31536000000, // 1 year from now
     };
-    localStorage.setItem("token", JSON.stringify(authData));
+    try {
+      localStorage.setItem("token", JSON.stringify(authData));
+    } catch (storageError) {
+      console.warn("Failed to migrate token to new format:", storageError);
+    }
     return authData.token;
   } catch (error) {
     console.error("Error parsing token:", error);
@@ -53,12 +61,20 @@ export const setToken = (token: string): void => {
     token,
     expiresAt: Date.now() + 31536000000, // 1 year in milliseconds
   };
-  localStorage.setItem("token", JSON.stringify(authData));
+  try {
+    localStorage.setItem("token", JSON.stringify(authData));
+  } catch (storageError) {
+    console.warn("Failed to store token in localStorage:", storageError);
+  }
 };
 
 export const clearToken = (): void => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("userRole");
+  try {
+    localStorage.removeItem("token");
+    localStorage.removeItem("userRole");
+  } catch (storageError) {
+    console.warn("Failed to clear token from localStorage:", storageError);
+  }
 };
 
 export const isTokenValid = (): boolean => {

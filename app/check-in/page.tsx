@@ -57,6 +57,8 @@ export default function CheckInPage() {
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const unlockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
+  const scanPulseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scanLockTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [user, setUser] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -475,14 +477,14 @@ setDoorUnlockStatus("");
             
             // UI pulse effect for visual confirmation
             setScanPulse(true);
-            setTimeout(() => setScanPulse(false), 300);
+            scanPulseTimeoutRef.current = setTimeout(() => setScanPulse(false), 300);
             
             await stopScanner();
             await handleAccessAction(trimmedText, "entry");
           } else {
             setError("Invalid code, please scan the Gym Entrance QR.");
             scanLockRef.current = true;
-            setTimeout(() => {
+            scanLockTimeoutRef.current = setTimeout(() => {
               scanLockRef.current = false;
             }, 2000);
           }
@@ -502,6 +504,8 @@ setDoorUnlockStatus("");
     return () => {
       if (redirectTimeoutRef.current) clearTimeout(redirectTimeoutRef.current);
       if (unlockTimeoutRef.current) clearTimeout(unlockTimeoutRef.current);
+      if (scanPulseTimeoutRef.current) clearTimeout(scanPulseTimeoutRef.current);
+      if (scanLockTimeoutRef.current) clearTimeout(scanLockTimeoutRef.current);
       
       // Stop scanner and clean up camera stream
       stopScanner().catch(err => {
