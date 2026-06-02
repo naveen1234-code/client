@@ -1,15 +1,10 @@
-const CACHE_NAME = "gym-ravana-v3";
-const STATIC_CACHE = "gym-ravana-static-v3";
-const API_CACHE = "gym-ravana-api-v3";
+const CACHE_NAME = "gym-ravana-v4";
+const STATIC_CACHE = "gym-ravana-static-v4";
+const API_CACHE = "gym-ravana-api-v4";
 
-// Static assets to cache on install
+// Static assets to cache on install (only truly static files)
 const STATIC_ASSETS = [
-  "/",
-  "/access",
   "/~offline",
-  "/check-in",
-  "/login",
-  "/dashboard",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
@@ -19,7 +14,23 @@ const STATIC_ASSETS = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
+      // Resilient caching: cache files individually, continue if one fails
+      return Promise.all(
+        STATIC_ASSETS.map(async (url) => {
+          try {
+            const request = new Request(url, { cache: "reload" });
+            const response = await fetch(request);
+            if (response.ok) {
+              await cache.put(request, response);
+              console.log(`[SW] Cached: ${url}`);
+            } else {
+              console.warn(`[SW] Failed to cache ${url}: ${response.status}`);
+            }
+          } catch (error) {
+            console.error(`[SW] Network error caching ${url}:`, error);
+          }
+        })
+      );
     })
   );
   self.skipWaiting();
