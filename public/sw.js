@@ -1,10 +1,10 @@
-const CACHE_NAME = "gym-ravana-v4";
-const STATIC_CACHE = "gym-ravana-static-v4";
-const API_CACHE = "gym-ravana-api-v4";
+const CACHE_NAME = "gym-ravana-v5";
+const STATIC_CACHE = "gym-ravana-static-v5";
+const API_CACHE = "gym-ravana-api-v5";
 
 // Static assets to cache on install (only truly static files)
 const STATIC_ASSETS = [
-  "/~offline",
+  "/offline.html",
   "/manifest.json",
   "/icon-192.png",
   "/icon-512.png",
@@ -94,9 +94,9 @@ self.addEventListener("fetch", (event) => {
               return networkResponse;
             })
             .catch(() => {
-              // Fallback to offline page for navigation requests
+              // Fallback to static offline page for navigation requests
               if (event.request.mode === "navigate") {
-                return cache.match("/~offline");
+                return cache.match("/offline.html");
               }
               throw new Error("Network request failed and no cache available");
             });
