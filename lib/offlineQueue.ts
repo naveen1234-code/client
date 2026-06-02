@@ -42,26 +42,31 @@ export const queueRequest = async (
   headers: Record<string, string>,
   body: string
 ): Promise<void> => {
-  if (!db) await initOfflineQueue();
+  try {
+    if (!db) await initOfflineQueue();
 
-  const request: QueuedRequest = {
-    id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    url,
-    method,
-    headers,
-    body,
-    timestamp: Date.now(),
-    retryCount: 0,
-  };
+    const request: QueuedRequest = {
+      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      url,
+      method,
+      headers,
+      body,
+      timestamp: Date.now(),
+      retryCount: 0,
+    };
 
-  return new Promise((resolve, reject) => {
-    const transaction = db!.transaction([STORE_NAME], "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
-    const addRequest = store.add(request);
+    return new Promise((resolve, reject) => {
+      const transaction = db!.transaction([STORE_NAME], "readwrite");
+      const store = transaction.objectStore(STORE_NAME);
+      const addRequest = store.add(request);
 
-    addRequest.onsuccess = () => resolve();
-    addRequest.onerror = () => reject(addRequest.error);
-  });
+      addRequest.onsuccess = () => resolve();
+      addRequest.onerror = () => reject(addRequest.error);
+    });
+  } catch (error) {
+    console.error("Failed to queue request:", error);
+    throw error;
+  }
 };
 
 export const getQueuedRequests = async (): Promise<QueuedRequest[]> => {
@@ -91,40 +96,45 @@ export const removeQueuedRequest = async (id: string): Promise<void> => {
 };
 
 export const retryQueuedRequests = async (): Promise<void> => {
-  const requests = await getQueuedRequests();
-  
-  for (const request of requests) {
-    try {
-      const response = await fetch(request.url, {
-        method: request.method,
-        headers: request.headers,
-        body: request.body,
-      });
-
-      if (response.ok) {
-        await removeQueuedRequest(request.id);
-        console.log("Successfully synced offline request:", request.id);
-      }
-    } catch (error) {
-      console.error("Failed to sync offline request:", request.id, error);
-      request.retryCount++;
-      
-      // Update retry count in IndexedDB
+  try {
+    const requests = await getQueuedRequests();
+    
+    for (const request of requests) {
       try {
-        if (!db) await initOfflineQueue();
-        const transaction = db!.transaction([STORE_NAME], "readwrite");
-        const store = transaction.objectStore(STORE_NAME);
-        store.put(request);
-      } catch (updateError) {
-        console.error("Failed to update retry count in IndexedDB:", request.id, updateError);
-      }
-      
-      // Remove requests that have failed too many times
-      if (request.retryCount >= 5) {
-        await removeQueuedRequest(request.id);
-        console.log("Removed failed request after 5 retries:", request.id);
+        const response = await fetch(request.url, {
+          method: request.method,
+          headers: request.headers,
+          body: request.body,
+        });
+
+        if (response.ok) {
+          await removeQueuedRequest(request.id);
+          console.log("Successfully synced offline request:", request.id);
+        }
+      } catch (error) {
+        console.error("Failed to sync offline request:", request.id, error);
+        request.retryCount++;
+        
+        // Update retry count in IndexedDB
+        try {
+          if (!db) await initOfflineQueue();
+          const transaction = db!.transaction([STORE_NAME], "readwrite");
+          const store = transaction.objectStore(STORE_NAME);
+          store.put(request);
+        } catch (updateError) {
+          console.error("Failed to update retry count in IndexedDB:", request.id, updateError);
+        }
+        
+        // Remove requests that have failed too many times
+        if (request.retryCount >= 5) {
+          await removeQueuedRequest(request.id);
+          console.log("Removed failed request after 5 retries:", request.id);
+        }
       }
     }
+  } catch (error) {
+    console.error("Failed to retry queued requests:", error);
+    throw error;
   }
 };
 

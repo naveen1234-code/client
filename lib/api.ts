@@ -26,7 +26,12 @@ const getApiBase = () => {
 
 const getToken = () => {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem("token");
+  try {
+    return localStorage.getItem("token");
+  } catch (error) {
+    console.warn("Failed to get token from localStorage:", error);
+    return null;
+  }
 };
 
 export async function apiFetch<T>(

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import HomeGalleryPreview from "@/components/HomeGalleryPreview";
+import { getToken } from "@/lib/auth";
 
 export default function Home() {
   const router = useRouter();
@@ -14,7 +15,7 @@ const [scrolled, setScrolled] = useState(false);
 const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     setIsLoggedIn(!!token);
   }, []);
 

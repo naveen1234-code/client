@@ -3,7 +3,6 @@
 import PageTransition from "@/components/PageTransition";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Html5Qrcode } from "html5-qrcode";
 import { getToken } from "@/lib/auth";
 import { initOfflineQueue, queueRequest, retryQueuedRequests } from "@/lib/offlineQueue";
 
@@ -51,7 +50,7 @@ export default function CheckInPage() {
   const router = useRouter();
   
 
-  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<any>(null);
   const scannerRunningRef = useRef(false);
   const scanLockRef = useRef(false);
   const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -182,6 +181,8 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
         console.log("Camera pre-warm failed:", err);
         // Don't show error, just mark as not pre-warmed
         setCameraPreWarmed(false);
+        // Show user-friendly notification about camera access
+        setError("Camera access required for check-in. Please allow camera permissions.");
       }
     };
 
@@ -199,32 +200,41 @@ const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   // Initialize offline queue and monitor network status
   useEffect(() => {
     const initOffline = async () => {
-      await initOfflineQueue();
-      
-      // Check initial online status
-      setIsOnline(navigator.onLine);
-      
-      // Monitor online/offline events
-      const handleOnline = async () => {
-        setIsOnline(true);
-        setSyncingOffline(true);
-        console.log("Network restored, syncing offline requests...");
-        await retryQueuedRequests();
-        setSyncingOffline(false);
-      };
-      
-      const handleOffline = () => {
-        setIsOnline(false);
-        console.log("Network lost, requests will be queued");
-      };
-      
-      window.addEventListener("online", handleOnline);
-      window.addEventListener("offline", handleOffline);
-      
-      return () => {
-        window.removeEventListener("online", handleOnline);
-        window.removeEventListener("offline", handleOffline);
-      };
+      try {
+        await initOfflineQueue();
+        
+        // Check initial online status
+        setIsOnline(navigator.onLine);
+        
+        // Monitor online/offline events
+        const handleOnline = async () => {
+          setIsOnline(true);
+          setSyncingOffline(true);
+          console.log("Network restored, syncing offline requests...");
+          try {
+            await retryQueuedRequests();
+          } catch (error) {
+            console.error("Failed to sync offline requests:", error);
+          }
+          setSyncingOffline(false);
+        };
+        
+        const handleOffline = () => {
+          setIsOnline(false);
+          console.log("Network lost, requests will be queued");
+        };
+        
+        window.addEventListener("online", handleOnline);
+        window.addEventListener("offline", handleOffline);
+        
+        return () => {
+          window.removeEventListener("online", handleOnline);
+          window.removeEventListener("offline", handleOffline);
+        };
+      } catch (error) {
+        console.error("Failed to initialize offline queue:", error);
+        setError("Offline sync initialization failed. Some features may not work.");
+      }
     };
     
     initOffline();
@@ -447,6 +457,8 @@ setDoorUnlockStatus("");
         } catch {}
       }
 
+      // Dynamic import of html5-qrcode to reduce initial bundle size
+      const { Html5Qrcode } = await import('html5-qrcode');
       const scanner = new Html5Qrcode("reader");
       scannerRef.current = scanner;
 
@@ -480,7 +492,14 @@ setDoorUnlockStatus("");
             scanPulseTimeoutRef.current = setTimeout(() => setScanPulse(false), 300);
             
             await stopScanner();
-            await handleAccessAction(trimmedText, "entry");
+            
+            try {
+              await handleAccessAction(trimmedText, "entry");
+            } catch (error) {
+              // Ensure lock is reset if handleAccessAction fails
+              scanLockRef.current = false;
+              console.error("Error in handleAccessAction:", error);
+            }
           } else {
             setError("Invalid code, please scan the Gym Entrance QR.");
             scanLockRef.current = true;
@@ -494,8 +513,10 @@ setDoorUnlockStatus("");
 
       scannerRunningRef.current = true;
       setScannerStarted(true);
-    } catch {
+    } catch (error) {
+      // Ensure lock is always reset on scanner startup failure
       scanLockRef.current = false;
+      console.error("Scanner startup error:", error);
       setError("Camera failed to start. Please allow camera access.");
     }
   };

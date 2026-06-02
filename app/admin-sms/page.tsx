@@ -76,7 +76,7 @@ export default function AdminSmsPage() {
   }, [router]);
 
   const handleSendSms = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!token) {
       router.push("/login");
@@ -142,7 +142,7 @@ export default function AdminSmsPage() {
   };
 
   const handleRetryFailedSms = async () => {
-  const token = localStorage.getItem("token");
+  const token = getToken();
 
   if (!token) {
     router.push("/login");

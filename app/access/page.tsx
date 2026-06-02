@@ -155,7 +155,7 @@ export default function MobileDashboardPage() {
       reader.onloadend = async () => {
         const base64String = reader.result as string;
 
-        const token = localStorage.getItem("token");
+        const token = getToken();
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/profile-picture`, {
           method: "PUT",
           headers: {

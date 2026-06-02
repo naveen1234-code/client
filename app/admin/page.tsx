@@ -265,7 +265,17 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Debounce search term to prevent excessive re-renders
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   const [showAllUsers, setShowAllUsers] = useState(false);
   const [showAllPayments, setShowAllPayments] = useState(false);
@@ -331,26 +341,28 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         setCurrentUser(meData);
         setIsAdminVerified(true);
 
-        const [
-          usersRes,
-          paymentsRes,
-          bookingsRes,
-          notificationsRes,
-          accessLogsRes,
-          insideMembersRes,
-          accessStatsRes,
-          legacyClaimsRes,
-        ] = await Promise.all([
+        // Load core data first (users, notifications)
+        const [usersRes, notificationsRes] = await Promise.all([
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/users`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
+          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/my`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        const usersData = await usersRes.json();
+        const notificationsData = await notificationsRes.json();
+
+        if (usersRes.ok) setUsers(usersData);
+        if (notificationsRes.ok) setNotifications(notificationsData);
+
+        // Lazy load non-core data in background
+        Promise.all([
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/payments/all`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/all`, {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/my`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/access/logs`, {
@@ -365,25 +377,23 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
           fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims`, {
             headers: { Authorization: `Bearer ${token}` },
           }),
-        ]);
+        ]).then(async ([paymentsRes, bookingsRes, accessLogsRes, insideMembersRes, accessStatsRes, legacyClaimsRes]) => {
+          const paymentsData = await paymentsRes.json();
+          const bookingsData = await bookingsRes.json();
+          const accessLogsData = await accessLogsRes.json();
+          const insideMembersData = await insideMembersRes.json();
+          const accessStatsData = await accessStatsRes.json();
+          const legacyClaimsData = await legacyClaimsRes.json();
 
-        const usersData = await usersRes.json();
-        const paymentsData = await paymentsRes.json();
-        const bookingsData = await bookingsRes.json();
-        const notificationsData = await notificationsRes.json();
-        const accessLogsData = await accessLogsRes.json();
-        const insideMembersData = await insideMembersRes.json();
-        const accessStatsData = await accessStatsRes.json();
-        const legacyClaimsData = await legacyClaimsRes.json();
-
-        if (usersRes.ok) setUsers(usersData);
-        if (paymentsRes.ok) setPayments(paymentsData);
-        if (bookingsRes.ok) setBookings(bookingsData);
-        if (notificationsRes.ok) setNotifications(notificationsData);
-        if (accessLogsRes.ok) setAccessLogs(accessLogsData);
-        if (insideMembersRes.ok) setInsideMembers(insideMembersData);
-        if (accessStatsRes.ok) setAccessStats(accessStatsData);
-        if (legacyClaimsRes.ok) setLegacyClaims(legacyClaimsData);
+          if (paymentsRes.ok) setPayments(paymentsData);
+          if (bookingsRes.ok) setBookings(bookingsData);
+          if (accessLogsRes.ok) setAccessLogs(accessLogsData);
+          if (insideMembersRes.ok) setInsideMembers(insideMembersData);
+          if (accessStatsRes.ok) setAccessStats(accessStatsData);
+          if (legacyClaimsRes.ok) setLegacyClaims(legacyClaimsData);
+        }).catch(err => {
+          console.error("Failed to load lazy data:", err);
+        });
       } catch (fetchError) {
         console.error("Admin fetch error:", fetchError);
         setError("Failed to load admin data");
@@ -413,11 +423,38 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   useEffect(() => {
     if (!isAdminVerified) return;
 
-    const interval = window.setInterval(() => {
-      refreshAccessLogs();
-    }, 10000);
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-    return () => window.clearInterval(interval);
+    const startPolling = () => {
+      if (interval) clearInterval(interval);
+      interval = setInterval(() => {
+        refreshAccessLogs();
+      }, 10000);
+    };
+
+    const stopPolling = () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        refreshAccessLogs();
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [isAdminVerified]);
 
   useEffect(() => {
@@ -427,49 +464,64 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
 
 
   const refreshUsers = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    try {
+      const token = getToken();
+      if (!token) return;
 
-    const usersRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/users`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+      const usersRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/users`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const usersData = await usersRes.json();
-    if (usersRes.ok) setUsers(usersData);
+      const usersData = await usersRes.json();
+      if (usersRes.ok) setUsers(usersData);
+    } catch (error) {
+      console.error("Failed to refresh users:", error);
+      setError("Failed to load users data");
+    }
   };
 
   const refreshBookings = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    try {
+      const token = getToken();
+      if (!token) return;
 
-    const bookingsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/all`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+      const bookingsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/bookings/all`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const bookingsData = await bookingsRes.json();
-    if (bookingsRes.ok) setBookings(bookingsData);
+      const bookingsData = await bookingsRes.json();
+      if (bookingsRes.ok) setBookings(bookingsData);
+    } catch (error) {
+      console.error("Failed to refresh bookings:", error);
+      setError("Failed to load bookings data");
+    }
   };
 
   const refreshLegacyClaims = async () => {
-    const token = localStorage.getItem("token");
-    if (!token) return;
+    try {
+      const token = getToken();
+      if (!token) return;
 
-    const legacyClaimsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+      const legacyClaimsRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/legacy-claims`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const legacyClaimsData = await legacyClaimsRes.json();
-    if (legacyClaimsRes.ok) setLegacyClaims(legacyClaimsData);
+      const legacyClaimsData = await legacyClaimsRes.json();
+      if (legacyClaimsRes.ok) setLegacyClaims(legacyClaimsData);
+    } catch (error) {
+      console.error("Failed to refresh legacy claims:", error);
+      setError("Failed to load legacy claims data");
+    }
   };
 
   const handleApproveLegacyClaim = async (claimId: string) => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -505,7 +557,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   };
 
   const handleRejectLegacyClaim = async (claimId: string) => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -538,7 +590,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   };
 
   const fetchMonthlyStatement = async (year: number, month: number) => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -573,7 +625,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   const refreshAccessLogs = async () => {
     if (document.hidden) return;
 
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -604,7 +656,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   };
 
   const handleDownloadStatementPdf = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) {
       setError("No token found");
       return;
@@ -648,7 +700,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
 };
 
   const handleForceExit = async (userId: string, userName: string) => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     const confirmed = window.confirm(`Force exit ${userName}?`);
@@ -809,7 +861,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
 
 
   const handleManualPayment = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!token) {
       setError("No token found");
@@ -941,7 +993,7 @@ const handleSmartMemberSelect = (userId: string) => {
     bookingId: string,
     status: "approved" | "cancelled"
   ) => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
 
     if (!token) {
       setError("No token found");
@@ -977,7 +1029,7 @@ const handleSmartMemberSelect = (userId: string) => {
   };
 
   const handleMarkNotificationRead = async (notificationId: string) => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -1003,7 +1055,7 @@ const handleSmartMemberSelect = (userId: string) => {
   };
 
   const handleMarkAllNotificationsRead = async () => {
-    const token = localStorage.getItem("token");
+    const token = getToken();
     if (!token) return;
 
     try {
@@ -1205,15 +1257,15 @@ const handleSmartMemberSelect = (userId: string) => {
     return sortedUsers.filter((user) => {
       const displayName = (user.fullName || user.name || "").toLowerCase();
       const matchesSearch =
-        displayName.includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase());
+        displayName.includes(debouncedSearchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
 
       const matchesStatus =
         statusFilter === "all" || user.membershipStatus === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [sortedUsers, searchTerm, statusFilter]);
+  }, [sortedUsers, debouncedSearchTerm, statusFilter]);
 
 
 
