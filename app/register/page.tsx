@@ -363,23 +363,36 @@ useEffect(() => {
       setError("");
       setSuccess("");
 
-      // Build payload, omitting legacy fields when not applicable
-      const payload = {
-        ...formData,
+      // Build payload with nested legacyDetails structure
+      const submitData = {
+        name: formData.fullName,
+        email: formData.email,
+        password: formData.password,
+        phoneNumber: formData.mobileNumber,
+        age: parseInt(formData.age),
+        gender: formData.sex,
+        emergencyContact: formData.homeNumber,
+        medicalConditions: formData.medicalNotes,
+        membershipNo: formData.membershipNo,
+        isLegacyMember: formData.isLegacyMember,
+        // Nest the legacy details fields cleanly here:
+        legacyDetails: formData.isLegacyMember ? {
+          claimedPhoneNumber: formData.claimedPhone,
+          startMonth: formData.startMonth,
+          startYear: formData.startYear,
+          previousMembershipPlanType: formData.previousPlan
+        } : null,
         turnstileToken,
-        ...(formData.isLegacyMember
-          ? {}
-          : { claimedPhone: undefined, startMonth: undefined, startYear: undefined, previousPlan: undefined }),
       };
 
-      console.log("Form Data:", payload);
+      console.log("Form Data:", submitData);
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(submitData),
       });
 
       const data = await res.json();
