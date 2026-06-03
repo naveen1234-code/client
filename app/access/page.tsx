@@ -25,6 +25,8 @@ type UserType = {
   height?: string;
   weight?: string;
   healthMetrics?: {
+    targetWeight?: number;
+    bmi?: number;
     beforeAfterMeasurements?: {
       before?: {
         weight?: number;
@@ -35,7 +37,6 @@ type UserType = {
         leftLeg?: number;
         rightLeg?: number;
         timestamp?: string;
-        editCount?: number;
       };
       after?: {
         weight?: number;
@@ -50,14 +51,14 @@ type UserType = {
     };
     beforeAfterPhotos?: {
       before?: {
-        front?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
-        back?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
-        side?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+        front?: { url?: string; publicId?: string; timestamp?: string };
+        back?: { url?: string; publicId?: string; timestamp?: string };
+        side?: { url?: string; publicId?: string; timestamp?: string };
       };
       after?: {
-        front?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
-        back?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
-        side?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+        front?: { url?: string; publicId?: string; timestamp?: string };
+        back?: { url?: string; publicId?: string; timestamp?: string };
+        side?: { url?: string; publicId?: string; timestamp?: string };
       };
     };
   };
@@ -118,22 +119,42 @@ export default function MobileDashboardPage() {
     after: { weight: "", chest: "", waist: "", leftArm: "", rightArm: "", leftLeg: "", rightLeg: "" },
   });
 
+  // Target weight state
+  const [targetWeight, setTargetWeight] = useState("");
+
   // Before/after photos state
   const [expandedPhoto, setExpandedPhoto] = useState<{ url: string; type: string; view: string } | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // BMI data state
-  const [bmiData, setBmiData] = useState<{ bmi: string; category: string } | null>(null);
+  // BMI data state (calculated dynamically)
+  const [calculatedBMI, setCalculatedBMI] = useState<{ bmi: number; category: string } | null>(null);
 
   useEffect(() => {
     fetchUserData();
   }, []);
 
+  // Calculate BMI dynamically when weight or height changes
   useEffect(() => {
-    if (user) {
-      fetchBMI();
+    if (user?.height && measurementForms.after.weight) {
+      const heightInMeters = parseFloat(user.height) / 100; // Convert cm to meters
+      const weight = parseFloat(measurementForms.after.weight);
+      
+      if (heightInMeters > 0 && weight > 0) {
+        const bmi = weight / (heightInMeters * heightInMeters);
+        let category = "";
+        if (bmi < 18.5) {
+          category = "Underweight";
+        } else if (bmi >= 18.5 && bmi < 25) {
+          category = "Normal";
+        } else if (bmi >= 25 && bmi < 30) {
+          category = "Overweight";
+        } else {
+          category = "Obese";
+        }
+        setCalculatedBMI({ bmi: parseFloat(bmi.toFixed(1)), category });
+      }
     }
-  }, [user]);
+  }, [measurementForms.after.weight, user?.height]);
 
   const fetchUserData = async () => {
     const token = getToken();
@@ -590,29 +611,9 @@ export default function MobileDashboardPage() {
     </div>
   );
 
-  const fetchBMI = async () => {
-    const token = getToken();
-    if (!token) return;
-
-    try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/bmi`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setBmiData(data);
-      }
-    } catch (error) {
-      console.error("Failed to fetch BMI:", error);
-    }
-  };
-
   const renderMeasurementInput = (type: "before" | "after", field: string, label: string) => {
     const currentValue = user?.healthMetrics?.beforeAfterMeasurements?.[type]?.[field as keyof typeof measurementForms.before] || "";
     const isBefore = type === "before";
-    const canEdit = !isBefore || (user?.healthMetrics?.beforeAfterMeasurements?.before?.editCount || 0) < 1;
 
     return (
       <div className="relative">
@@ -625,9 +626,7 @@ export default function MobileDashboardPage() {
             newForms[type][field as keyof typeof measurementForms.before] = e.target.value;
             setMeasurementForms(newForms);
           }}
-          onBlur={() => handleSaveMeasurement(type)}
-          disabled={!canEdit}
-          className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none disabled:opacity-50"
+          className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
           placeholder={label}
           id={`${type}-${field}-input`}
         />
@@ -663,6 +662,8 @@ export default function MobileDashboardPage() {
           measurements: Object.fromEntries(
             Object.entries(measurements).map(([k, v]) => [k, v ? parseFloat(v) : 0])
           ),
+          targetWeight: targetWeight ? parseFloat(targetWeight) : undefined,
+          bmi: calculatedBMI?.bmi || undefined,
         }),
       });
 
@@ -680,10 +681,44 @@ export default function MobileDashboardPage() {
     }
   };
 
+  const handleDeleteMeasurement = async (type: "before" | "after") => {
+    const token = getToken();
+    if (!token) return;
+
+    if (!confirm(`Are you sure you want to delete all ${type} measurements?`)) return;
+
+    try {
+      setSavingMeasurement(true);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/before-after-measurements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type,
+          measurements: {},
+          targetWeight: targetWeight ? parseFloat(targetWeight) : undefined,
+          bmi: calculatedBMI?.bmi || undefined,
+        }),
+      });
+
+      if (res.ok) {
+        await fetchUserData();
+        setMeasurementForms({
+          ...measurementForms,
+          [type]: { weight: "", chest: "", waist: "", leftArm: "", rightArm: "", leftLeg: "", rightLeg: "" },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to delete measurements:", error);
+    } finally {
+      setSavingMeasurement(false);
+    }
+  };
+
   const renderPhotoUpload = (type: "before" | "after", view: "front" | "back" | "side", label: string) => {
     const photo = user?.healthMetrics?.beforeAfterPhotos?.[type]?.[view];
-    const isBefore = type === "before";
-    const canEdit = !isBefore || (photo?.editCount || 0) < 1;
 
     return (
       <div className="relative">
@@ -693,17 +728,15 @@ export default function MobileDashboardPage() {
             onClick={() => setExpandedPhoto({ url: photo.url || "", type, view })}
           >
             <img src={photo.url} alt={`${type} ${view}`} className="h-full w-full object-cover" />
-            {canEdit && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDeletePhoto(type, view);
-                }}
-                className="absolute right-2 top-2 rounded-full bg-red-600 p-1 text-white"
-              >
-                ×
-              </button>
-            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeletePhoto(type, view);
+              }}
+              className="absolute right-2 top-2 rounded-full bg-red-600 p-1 text-white"
+            >
+              ×
+            </button>
           </div>
         ) : (
           <label className="flex aspect-square cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-black/40 transition hover:border-red-500/30">
@@ -711,7 +744,7 @@ export default function MobileDashboardPage() {
               type="file"
               accept="image/*"
               onChange={(e) => handlePhotoUpload(e, type, view)}
-              disabled={!canEdit || uploadingPhoto}
+              disabled={uploadingPhoto}
               className="hidden"
             />
             <div className="text-center">
@@ -787,11 +820,26 @@ export default function MobileDashboardPage() {
   const calculateProgressPercentage = () => {
     const before = user?.healthMetrics?.beforeAfterMeasurements?.before;
     const after = user?.healthMetrics?.beforeAfterMeasurements?.after;
+    const targetWeight = user?.healthMetrics?.targetWeight || 0;
 
     if (!before || !after || !before.weight || !after.weight) return 0;
 
-    const weightDiff = before.weight - after.weight;
-    const progress = (weightDiff / before.weight) * 100;
+    const beforeWeight = before.weight;
+    const afterWeight = after.weight;
+
+    // Calculate absolute deltas (After - Before)
+    const weightDelta = afterWeight - beforeWeight;
+
+    // Calculate target progress percentage: ((beforeWeight - afterWeight) / (beforeWeight - targetWeight)) * 100
+    // Safety guard: if (beforeWeight - targetWeight) === 0, default to 0%
+    const denominator = beforeWeight - targetWeight;
+    if (denominator === 0) {
+      return 0; // Default to 0% if target equals before weight
+    }
+
+    const progress = ((beforeWeight - afterWeight) / denominator) * 100;
+
+    // Handle progress over 100% - cap at 100% for clean display
     return Math.max(0, Math.min(100, progress));
   };
 
@@ -824,11 +872,44 @@ export default function MobileDashboardPage() {
         <p className="mb-4 text-sm font-semibold text-gray-400">BMI Calculator</p>
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-3xl font-bold text-white">{bmiData?.bmi || "--"}</p>
+            <p className="text-3xl font-bold text-white">{calculatedBMI?.bmi || "--"}</p>
             <p className="text-xs text-gray-400">BMI</p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2">
-            <p className="text-sm font-semibold text-red-400">{bmiData?.category || "Calculating..."}</p>
+            <p className="text-sm font-semibold text-red-400">{calculatedBMI?.category || "Calculating..."}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Target Weight */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <p className="mb-4 text-sm font-semibold text-gray-400">Target Weight</p>
+        <div className="space-y-2">
+          <div className="relative">
+            <input
+              type="number"
+              step="0.1"
+              value={targetWeight || user?.healthMetrics?.targetWeight || ""}
+              onChange={(e) => setTargetWeight(e.target.value)}
+              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
+              placeholder="Target Weight (kg)"
+              id="target-weight-input"
+            />
+            <label
+              htmlFor="target-weight-input"
+              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+            >
+              Target Weight (kg)
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleSaveMeasurement("after")}
+              disabled={savingMeasurement}
+              className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingMeasurement ? "Saving..." : "Save Target"}
+            </button>
           </div>
         </div>
       </div>
@@ -849,6 +930,22 @@ export default function MobileDashboardPage() {
               {renderMeasurementInput("before", "leftLeg", "Left Leg (cm)")}
               {renderMeasurementInput("before", "rightLeg", "Right Leg (cm)")}
             </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => handleSaveMeasurement("before")}
+                disabled={savingMeasurement}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingMeasurement ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={() => handleDeleteMeasurement("before")}
+                disabled={savingMeasurement}
+                className="flex-1 rounded-xl border border-red-600 px-4 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-600/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
           </div>
           {/* After Column */}
           <div>
@@ -861,6 +958,22 @@ export default function MobileDashboardPage() {
               {renderMeasurementInput("after", "rightArm", "Right Arm (cm)")}
               {renderMeasurementInput("after", "leftLeg", "Left Leg (cm)")}
               {renderMeasurementInput("after", "rightLeg", "Right Leg (cm)")}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => handleSaveMeasurement("after")}
+                disabled={savingMeasurement}
+                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingMeasurement ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={() => handleDeleteMeasurement("after")}
+                disabled={savingMeasurement}
+                className="flex-1 rounded-xl border border-red-600 px-4 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-600/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
