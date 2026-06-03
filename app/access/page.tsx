@@ -22,27 +22,44 @@ type UserType = {
   profilePicture?: string;
   mobileNumber?: string;
   fitnessGoals?: string;
+  height?: string;
+  weight?: string;
   healthMetrics?: {
-    weightLogs: Array<{ weight: number; date: string }>;
-    bodyFatLogs: Array<{ bodyFat: number; date: string }>;
-    muscleMassLogs: Array<{ muscleMass: number; date: string }>;
-    hydrationLogs: Array<{ amount: number; date: string }>;
-    sleepLogs: Array<{ quality: string; hours: number; date: string }>;
-    progressPhotos: Array<{ url: string; date: string }>;
-    measurementHistory?: Array<{
-      timestamp: string;
-      weight: number;
-      bodyFat: number;
-      muscleMass: number;
-      chest: number;
-      shoulders: number;
-      waist: number;
-      hips: number;
-      leftBicep: number;
-      rightBicep: number;
-      leftThigh: number;
-      rightThigh: number;
-    }>;
+    beforeAfterMeasurements?: {
+      before?: {
+        weight?: number;
+        chest?: number;
+        waist?: number;
+        leftArm?: number;
+        rightArm?: number;
+        leftLeg?: number;
+        rightLeg?: number;
+        timestamp?: string;
+        editCount?: number;
+      };
+      after?: {
+        weight?: number;
+        chest?: number;
+        waist?: number;
+        leftArm?: number;
+        rightArm?: number;
+        leftLeg?: number;
+        rightLeg?: number;
+        timestamp?: string;
+      };
+    };
+    beforeAfterPhotos?: {
+      before?: {
+        front?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+        back?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+        side?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+      };
+      after?: {
+        front?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+        back?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+        side?: { url?: string; publicId?: string; timestamp?: string; editCount?: number };
+      };
+    };
   };
 };
 
@@ -95,9 +112,28 @@ export default function MobileDashboardPage() {
   // Profile picture upload state
   const [uploadingPicture, setUploadingPicture] = useState(false);
 
+  // Before/after measurements state
+  const [measurementForms, setMeasurementForms] = useState({
+    before: { weight: "", chest: "", waist: "", leftArm: "", rightArm: "", leftLeg: "", rightLeg: "" },
+    after: { weight: "", chest: "", waist: "", leftArm: "", rightArm: "", leftLeg: "", rightLeg: "" },
+  });
+
+  // Before/after photos state
+  const [expandedPhoto, setExpandedPhoto] = useState<{ url: string; type: string; view: string } | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // BMI data state
+  const [bmiData, setBmiData] = useState<{ bmi: string; category: string } | null>(null);
+
   useEffect(() => {
     fetchUserData();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchBMI();
+    }
+  }, [user]);
 
   const fetchUserData = async () => {
     const token = getToken();
@@ -554,6 +590,228 @@ export default function MobileDashboardPage() {
     </div>
   );
 
+  const fetchBMI = async () => {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/bmi`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBmiData(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch BMI:", error);
+    }
+  };
+
+  const renderMeasurementInput = (type: "before" | "after", field: string, label: string) => {
+    const currentValue = user?.healthMetrics?.beforeAfterMeasurements?.[type]?.[field as keyof typeof measurementForms.before] || "";
+    const isBefore = type === "before";
+    const canEdit = !isBefore || (user?.healthMetrics?.beforeAfterMeasurements?.before?.editCount || 0) < 1;
+
+    return (
+      <div className="relative">
+        <input
+          type="number"
+          step="0.1"
+          value={measurementForms[type][field as keyof typeof measurementForms.before] || currentValue}
+          onChange={(e) => {
+            const newForms = { ...measurementForms };
+            newForms[type][field as keyof typeof measurementForms.before] = e.target.value;
+            setMeasurementForms(newForms);
+          }}
+          onBlur={() => handleSaveMeasurement(type)}
+          disabled={!canEdit}
+          className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none disabled:opacity-50"
+          placeholder={label}
+          id={`${type}-${field}-input`}
+        />
+        <label
+          htmlFor={`${type}-${field}-input`}
+          className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
+        >
+          {label}
+        </label>
+      </div>
+    );
+  };
+
+  const handleSaveMeasurement = async (type: "before" | "after") => {
+    const token = getToken();
+    if (!token) return;
+
+    const measurements = measurementForms[type];
+    const hasValues = Object.values(measurements).some(v => v !== "");
+
+    if (!hasValues) return;
+
+    try {
+      setSavingMeasurement(true);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/before-after-measurements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type,
+          measurements: Object.fromEntries(
+            Object.entries(measurements).map(([k, v]) => [k, v ? parseFloat(v) : 0])
+          ),
+        }),
+      });
+
+      if (res.ok) {
+        await fetchUserData();
+        setMeasurementForms({
+          ...measurementForms,
+          [type]: { weight: "", chest: "", waist: "", leftArm: "", rightArm: "", leftLeg: "", rightLeg: "" },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to save measurements:", error);
+    } finally {
+      setSavingMeasurement(false);
+    }
+  };
+
+  const renderPhotoUpload = (type: "before" | "after", view: "front" | "back" | "side", label: string) => {
+    const photo = user?.healthMetrics?.beforeAfterPhotos?.[type]?.[view];
+    const isBefore = type === "before";
+    const canEdit = !isBefore || (photo?.editCount || 0) < 1;
+
+    return (
+      <div className="relative">
+        {photo?.url ? (
+          <div
+            className="aspect-square cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-black/40"
+            onClick={() => setExpandedPhoto({ url: photo.url || "", type, view })}
+          >
+            <img src={photo.url} alt={`${type} ${view}`} className="h-full w-full object-cover" />
+            {canEdit && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeletePhoto(type, view);
+                }}
+                className="absolute right-2 top-2 rounded-full bg-red-600 p-1 text-white"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ) : (
+          <label className="flex aspect-square cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-black/40 transition hover:border-red-500/30">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => handlePhotoUpload(e, type, view)}
+              disabled={!canEdit || uploadingPhoto}
+              className="hidden"
+            />
+            <div className="text-center">
+              <span className="text-2xl">📷</span>
+              <p className="mt-1 text-xs text-gray-400">{label}</p>
+            </div>
+          </label>
+        )}
+      </div>
+    );
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: "before" | "after", view: "front" | "back" | "side") => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      setUploadingPhoto(true);
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+
+        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/before-after-photos`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type,
+            view,
+            url: base64String,
+            publicId: `temp-${Date.now()}`,
+          }),
+        });
+
+        if (res.ok) {
+          await fetchUserData();
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Failed to upload photo:", error);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleDeletePhoto = async (type: "before" | "after", view: "front" | "back" | "side") => {
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/before-after-photos/${type}/${view}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        await fetchUserData();
+      }
+    } catch (error) {
+      console.error("Failed to delete photo:", error);
+    }
+  };
+
+  const calculateProgressPercentage = () => {
+    const before = user?.healthMetrics?.beforeAfterMeasurements?.before;
+    const after = user?.healthMetrics?.beforeAfterMeasurements?.after;
+
+    if (!before || !after || !before.weight || !after.weight) return 0;
+
+    const weightDiff = before.weight - after.weight;
+    const progress = (weightDiff / before.weight) * 100;
+    return Math.max(0, Math.min(100, progress));
+  };
+
+  const calculateBodyFatPercentage = () => {
+    const measurements = user?.healthMetrics?.beforeAfterMeasurements?.after;
+    if (!measurements) return 0;
+
+    const weight = measurements.weight || 0;
+    const height = parseFloat(user?.height || "0") || 0;
+
+    if (weight === 0 || height === 0) return 0;
+
+    const heightInMeters = height / 100;
+    const bmi = weight / (heightInMeters * heightInMeters);
+
+    const bodyFat = (1.20 * bmi) + (0.23 * 30) - 16.2;
+
+    return Math.max(0, Math.min(100, bodyFat));
+  };
+
   const renderHealthTab = () => (
     <div className="space-y-6 pb-24">
       <div>
@@ -561,235 +819,141 @@ export default function MobileDashboardPage() {
         <p className="text-sm text-gray-400">Track your fitness journey</p>
       </div>
 
-      {/* Body Metrics Summary */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-2xl border border-white/10 bg-[#16161F] p-4 text-center">
-          <p className="text-2xl font-bold text-white">
-            {user?.healthMetrics?.weightLogs?.[0]?.weight || "--"}
-          </p>
-          <p className="text-xs text-gray-400">Weight (kg)</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[#16161F] p-4 text-center">
-          <p className="text-2xl font-bold text-white">
-            {user?.healthMetrics?.measurementHistory?.[0]?.chest || "--"}
-          </p>
-          <p className="text-xs text-gray-400">Chest (cm)</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-[#16161F] p-4 text-center">
-          <p className="text-2xl font-bold text-white">
-            {user?.healthMetrics?.measurementHistory?.[0]?.waist || "--"}
-          </p>
-          <p className="text-xs text-gray-400">Waist (cm)</p>
-        </div>
-      </div>
-
-      {/* Simplified Measurement Form */}
+      {/* BMI Calculator */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Log Measurements</p>
-        <div className="space-y-4">
-          <div className="relative">
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.weight}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, weight: e.target.value })}
-              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
-              placeholder="Weight"
-              id="weight-input"
-            />
-            <label
-              htmlFor="weight-input"
-              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
-            >
-              Weight (kg)
-            </label>
+        <p className="mb-4 text-sm font-semibold text-gray-400">BMI Calculator</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-3xl font-bold text-white">{bmiData?.bmi || "--"}</p>
+            <p className="text-xs text-gray-400">BMI</p>
           </div>
-          <div className="relative">
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.chest}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, chest: e.target.value })}
-              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
-              placeholder="Chest"
-              id="chest-input"
-            />
-            <label
-              htmlFor="chest-input"
-              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
-            >
-              Chest (cm)
-            </label>
-          </div>
-          <div className="relative">
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.waist}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, waist: e.target.value })}
-              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
-              placeholder="Waist"
-              id="waist-input"
-            />
-            <label
-              htmlFor="waist-input"
-              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
-            >
-              Waist (cm)
-            </label>
-          </div>
-          <div className="relative">
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.arms}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, arms: e.target.value })}
-              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
-              placeholder="Arms"
-              id="arms-input"
-            />
-            <label
-              htmlFor="arms-input"
-              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
-            >
-              Arms (cm)
-            </label>
-          </div>
-          <div className="relative">
-            <input
-              type="number"
-              step="0.1"
-              value={measurementForm.legs}
-              onChange={(e) => setMeasurementForm({ ...measurementForm, legs: e.target.value })}
-              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
-              placeholder="Legs"
-              id="legs-input"
-            />
-            <label
-              htmlFor="legs-input"
-              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
-            >
-              Legs (cm)
-            </label>
+          <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2">
+            <p className="text-sm font-semibold text-red-400">{bmiData?.category || "Calculating..."}</p>
           </div>
         </div>
-        <button
-          onClick={handleSaveFullMeasurement}
-          disabled={savingMeasurement}
-          className="mt-6 w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {savingMeasurement ? "Saving..." : "Save Measurements"}
-        </button>
       </div>
 
-      {/* Before & After Image Comparison */}
-      {user?.healthMetrics?.progressPhotos && user.healthMetrics.progressPhotos.length >= 2 && (
+      {/* Before/After Measurements Table */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <p className="mb-4 text-sm font-semibold text-gray-400">Before / After Measurements</p>
+        <div className="grid grid-cols-2 gap-4">
+          {/* Before Column */}
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Before</p>
+            <div className="space-y-2">
+              {renderMeasurementInput("before", "weight", "Weight (kg)")}
+              {renderMeasurementInput("before", "chest", "Chest (cm)")}
+              {renderMeasurementInput("before", "waist", "Waist (cm)")}
+              {renderMeasurementInput("before", "leftArm", "Left Arm (cm)")}
+              {renderMeasurementInput("before", "rightArm", "Right Arm (cm)")}
+              {renderMeasurementInput("before", "leftLeg", "Left Leg (cm)")}
+              {renderMeasurementInput("before", "rightLeg", "Right Leg (cm)")}
+            </div>
+          </div>
+          {/* After Column */}
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">After</p>
+            <div className="space-y-2">
+              {renderMeasurementInput("after", "weight", "Weight (kg)")}
+              {renderMeasurementInput("after", "chest", "Chest (cm)")}
+              {renderMeasurementInput("after", "waist", "Waist (cm)")}
+              {renderMeasurementInput("after", "leftArm", "Left Arm (cm)")}
+              {renderMeasurementInput("after", "rightArm", "Right Arm (cm)")}
+              {renderMeasurementInput("after", "leftLeg", "Left Leg (cm)")}
+              {renderMeasurementInput("after", "rightLeg", "Right Leg (cm)")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Before/After Photo Gallery */}
+      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+        <p className="mb-4 text-sm font-semibold text-gray-400">Before / After Photos</p>
+        <div className="grid grid-cols-2 gap-4">
+          {/* Before Photos */}
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Before</p>
+            <div className="space-y-3">
+              {renderPhotoUpload("before", "front", "Front")}
+              {renderPhotoUpload("before", "back", "Back")}
+              {renderPhotoUpload("before", "side", "Side")}
+            </div>
+          </div>
+          {/* After Photos */}
+          <div>
+            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">After</p>
+            <div className="space-y-3">
+              {renderPhotoUpload("after", "front", "Front")}
+              {renderPhotoUpload("after", "back", "Back")}
+              {renderPhotoUpload("after", "side", "Side")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Charts */}
+      <div className="grid grid-cols-2 gap-4">
         <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-          <p className="mb-4 text-sm font-semibold text-gray-400">Before & After Comparison</p>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <p className="mb-2 text-xs font-semibold text-gray-500">Before</p>
-              <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-                <img
-                  src={user.healthMetrics.progressPhotos[0].url}
-                  alt="Before"
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316161F'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
-                  }}
+          <p className="mb-4 text-sm font-semibold text-gray-400">Progress</p>
+          <div className="flex items-center justify-center">
+            <div className="relative h-32 w-32">
+              <svg className="h-full w-full transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeWidth="8"
+                  fill="none"
                 />
-              </div>
-              <p className="mt-2 text-xs text-gray-400">
-                {new Date(user.healthMetrics.progressPhotos[0].date).toLocaleDateString()}
-              </p>
-            </div>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
-              VS
-            </div>
-            <div className="flex-1">
-              <p className="mb-2 text-xs font-semibold text-gray-500">After</p>
-              <div className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-black/40">
-                <img
-                  src={user.healthMetrics.progressPhotos[user.healthMetrics.progressPhotos.length - 1].url}
-                  alt="After"
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316161F'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
-                  }}
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#ef4444"
+                  strokeWidth="8"
+                  fill="none"
+                  strokeDasharray={`${calculateProgressPercentage()} 352`}
+                  strokeLinecap="round"
                 />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-2xl font-bold text-white">{calculateProgressPercentage().toFixed(0)}%</p>
               </div>
-              <p className="mt-2 text-xs text-gray-400">
-                {new Date(user.healthMetrics.progressPhotos[user.healthMetrics.progressPhotos.length - 1].date).toLocaleDateString()}
-              </p>
             </div>
           </div>
         </div>
-      )}
-
-      {/* AI Health Engine Audit */}
-      <div className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/10 to-transparent p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <p className="text-sm font-semibold text-red-400">🤖 AI HEALTH ENGINE AUDIT</p>
-          <button
-            onClick={handleGenerateAIAudit}
-            disabled={loadingAiAudit}
-            className="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {loadingAiAudit ? "Analyzing..." : "Generate Audit"}
-          </button>
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+          <p className="mb-4 text-sm font-semibold text-gray-400">Body Fat</p>
+          <div className="flex items-center justify-center">
+            <div className="relative h-32 w-32">
+              <svg className="h-full w-full transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeWidth="8"
+                  fill="none"
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="56"
+                  stroke="#ef4444"
+                  strokeWidth="8"
+                  fill="none"
+                  strokeDasharray={`${calculateBodyFatPercentage()} 352`}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <p className="text-2xl font-bold text-white">{calculateBodyFatPercentage().toFixed(0)}%</p>
+              </div>
+            </div>
+          </div>
         </div>
-        {loadingAiAudit ? (
-          <div className="space-y-3">
-            <div className="h-4 animate-pulse rounded bg-white/10" />
-            <div className="h-4 animate-pulse rounded bg-white/10" />
-            <div className="h-4 animate-pulse rounded bg-white/10" />
-          </div>
-        ) : aiAudit ? (
-          <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-            <p className="whitespace-pre-wrap text-sm text-gray-300">{aiAudit}</p>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-500">Click "Generate Audit" to get personalized AI fitness feedback based on your measurement history.</p>
-        )}
       </div>
-
-      {/* Progress Photo Upload */}
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Upload Progress Photo</p>
-        <label className="flex w-full cursor-pointer items-center justify-center rounded-2xl border-2 border-dashed border-white/20 bg-black/40 px-4 py-8 transition hover:border-red-500/30">
-          <div className="text-center">
-            <span className="text-3xl">📸</span>
-            <p className="mt-2 text-sm text-gray-400">Tap to upload photo</p>
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleProgressPhotoUpload}
-            className="hidden"
-          />
-        </label>
-      </div>
-
-      {/* Progress Photos Grid */}
-      {user?.healthMetrics?.progressPhotos && user.healthMetrics.progressPhotos.length > 0 && (
-        <div>
-          <p className="mb-3 text-sm font-semibold text-gray-400">Progress Photos</p>
-          <div className="grid grid-cols-3 gap-3">
-            {user.healthMetrics.progressPhotos.slice(0, 6).map((photo, index) => (
-              <div key={index} className="aspect-square overflow-hidden rounded-2xl border border-white/10 bg-[#16161F]">
-                <img 
-                  src={photo.url} 
-                  alt={`Progress ${index + 1}`} 
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%2316161F'/%3E%3Ctext x='50' y='50' text-anchor='middle' dy='.3em' fill='%23666' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -1167,34 +1331,19 @@ export default function MobileDashboardPage() {
         {healthModal.isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
             <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#16161F] p-6">
-              <h2 className="mb-4 text-xl font-bold text-white">
-                Log {healthModal.type === "weight" && "Weight"}
-                {healthModal.type === "hydration" && "Hydration"}
-                {healthModal.type === "sleep" && "Sleep"}
-                {healthModal.type === "progressPhoto" && "Progress Photo"}
-              </h2>
-
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white">Log {healthModal.type}</p>
+                <button
+                  onClick={() => setHealthModal({ type: "", isOpen: false })}
+                  className="text-gray-400 transition hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
               <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-semibold text-gray-400">
-                    {healthModal.type === "weight" && "Weight (kg)"}
-                    {healthModal.type === "hydration" && "Amount (L)"}
-                    {healthModal.type === "sleep" && "Hours"}
-                    {healthModal.type === "progressPhoto" && "Photo URL"}
-                  </label>
-                  <input
-                    type={healthModal.type === "progressPhoto" ? "url" : "number"}
-                    step="0.1"
-                    value={metricValue}
-                    onChange={(e) => setMetricValue(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
-                    placeholder="Enter value"
-                  />
-                </div>
-
                 {healthModal.type === "sleep" && (
                   <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-400">
+                    <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
                       Sleep Quality
                     </label>
                     <select
@@ -1202,34 +1351,56 @@ export default function MobileDashboardPage() {
                       onChange={(e) => setMetricQuality(e.target.value)}
                       className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white focus:border-red-500/50 focus:outline-none"
                     >
-                      <option value="excellent">Excellent</option>
                       <option value="good">Good</option>
                       <option value="fair">Fair</option>
                       <option value="poor">Poor</option>
                     </select>
                   </div>
                 )}
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setHealthModal({ type: "", isOpen: false })}
-                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleLogMetric}
-                    disabled={loggingMetric || !metricValue}
-                    className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {loggingMetric ? "Logging..." : "Log"}
-                  </button>
+                <div>
+                  <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+                    Value
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={metricValue}
+                    onChange={(e) => setMetricValue(e.target.value)}
+                    className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
+                    placeholder="Enter value"
+                  />
                 </div>
+                <button
+                  onClick={handleLogMetric}
+                  disabled={loggingMetric}
+                  className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loggingMetric ? "Logging..." : "Log Metric"}
+                </button>
               </div>
             </div>
           </div>
         )}
-      </main>
-    </PageTransition>
+
+        {/* Photo Expansion Modal */}
+        {expandedPhoto && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm px-4">
+            <div className="relative w-full max-w-3xl">
+              <button
+                onClick={() => setExpandedPhoto(null)}
+                className="absolute -top-12 right-0 text-white text-4xl hover:text-red-400 transition"
+              >
+                ×
+              </button>
+              <img
+                src={expandedPhoto.url}
+                alt="Expanded photo"
+                className="w-full rounded-2xl object-contain"
+              />
+            </div>
+          </div>
+        )}
+    </main>
+      </PageTransition>
   );
 }
