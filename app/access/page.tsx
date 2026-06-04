@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getToken } from "@/lib/auth";
 import PageTransition from "@/components/PageTransition";
+import Image from 'next/image';
 
 type UserType = {
   _id: string;
@@ -74,14 +75,20 @@ export default function MobileDashboardPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-// Profile form state
+  // Profile form state
   const [profileForm, setProfileForm] = useState({
     fullName: "",
     mobileNumber: "",
     fitnessGoals: "",
-    height: "", // Added height tracking here
+    height: "",
   });
   const [savingProfile, setSavingProfile] = useState(false);
+
+  const [checklist, setChecklist] = useState({
+  workout: false,
+  meals: false,
+  stretching: false,
+});
 
   // Health metrics state
   const [healthModal, setHealthModal] = useState<{
@@ -93,13 +100,7 @@ export default function MobileDashboardPage() {
   const [loggingMetric, setLoggingMetric] = useState(false);
 
   // Full measurement form state (simplified to 5 key metrics)
-  const [measurementForm, setMeasurementForm] = useState({
-    weight: "",
-    chest: "",
-    waist: "",
-    arms: "",
-    legs: "",
-  });
+
   const [savingMeasurement, setSavingMeasurement] = useState(false);
 
   // AI Health Audit state
@@ -127,40 +128,56 @@ export default function MobileDashboardPage() {
   const [expandedPhoto, setExpandedPhoto] = useState<{ url: string; type: string; view: string } | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
-  // BMI data state (calculated dynamically)
-  const [calculatedBMI, setCalculatedBMI] = useState<{ bmi: number; category: string } | null>(null);
+  // Manual BMI States
+  const [manualBMI, setManualBMI] = useState<{ bmi: number; category: string } | null>(null);
+  const [bmiWeight, setBmiWeight] = useState("");
+  const [bmiHeight, setBmiHeight] = useState("");
+  const [bmiAge, setBmiAge] = useState("");
+
+  // Manual Body Fat States (Navy Seal Formula)
+  const [bfGender, setBfGender] = useState<"male" | "female">("male");
+  const [bfHeight, setBfHeight] = useState("");
+  const [bfNeck, setBfNeck] = useState("");
+  const [bfWaist, setBfWaist] = useState("");
+  const [bfHip, setBfHip] = useState("");
+  const [manualBF, setManualBF] = useState<number | null>(null);
+
+  // --- MANUAL CALCULATION HANDLERS ---
+  const handleCalculateBMI = () => {
+    const w = parseFloat(bmiWeight);
+    const h = parseFloat(bmiHeight) / 100; // convert cm to meters
+    if (!w || !h || h <= 0) return;
+
+    const score = w / (h * h);
+    let cat = "Normal Weight";
+    if (score < 18.5) cat = "Underweight";
+    else if (score >= 25 && score < 30) cat = "Overweight";
+    else if (score >= 30) cat = "Obese";
+
+    setManualBMI({ bmi: Math.round(score * 10) / 10, category: cat });
+  };
+
+  const handleCalculateBodyFat = () => {
+    const h = parseFloat(bfHeight);
+    const n = parseFloat(bfNeck);
+    const w = parseFloat(bfWaist);
+    const hp = parseFloat(bfHip);
+
+    if (!h || !n || !w || (bfGender === "female" && !hp)) return;
+
+    let bodyFat = 0;
+    if (bfGender === "male") {
+      bodyFat = 495 / (1.0324 - 0.19077 * Math.log10(w - n) + 0.15456 * Math.log10(h)) - 450;
+    } else {
+      bodyFat = 495 / (1.29579 - 0.35004 * Math.log10(w + hp - n) + 0.221 * Math.log10(h)) - 450;
+    }
+
+    setManualBF(bodyFat > 0 ? Math.round(bodyFat * 10) / 10 : 0);
+  };
 
   useEffect(() => {
     fetchUserData();
   }, []);
-
- // Calculate BMI dynamically when weight or height changes
-  useEffect(() => {
-    // Fallback logic: check live typing input first, otherwise read what's already saved in MongoDB
-    const savedWeight = user?.healthMetrics?.beforeAfterMeasurements?.after?.weight?.toString() || "";
-    const currentWeight = measurementForms.after.weight || savedWeight;
-    const currentHeight = user?.height || "";
-
-    if (currentHeight && currentWeight) {
-      const heightInMeters = parseFloat(currentHeight) / 100;
-      const weight = parseFloat(currentWeight);
-      
-      if (heightInMeters > 0 && weight > 0) {
-        const bmi = weight / (heightInMeters * heightInMeters);
-        let category = "";
-        if (bmi < 18.5) category = "Underweight";
-        else if (bmi >= 18.5 && bmi < 25) category = "Normal";
-        else if (bmi >= 25 && bmi < 30) category = "Overweight";
-        else category = "Obese";
-        
-        setCalculatedBMI({ bmi: parseFloat(bmi.toFixed(1)), category });
-      } else {
-        setCalculatedBMI(null);
-      }
-    } else {
-      setCalculatedBMI(null);
-    }
-  }, [measurementForms.after.weight, user]);
 
   const fetchUserData = async () => {
     const token = getToken();
@@ -186,12 +203,12 @@ export default function MobileDashboardPage() {
         return;
       }
 
-setUser(userData);
+      setUser(userData);
       setProfileForm({
         fullName: userData.fullName || "",
         mobileNumber: userData.mobileNumber || "",
         fitnessGoals: userData.fitnessGoals || "",
-        height: userData.height || "", // Added height loading here
+        height: userData.height || "",
       });
     } catch {
       setError("Failed to load dashboard");
@@ -214,7 +231,6 @@ setUser(userData);
       setUploadingPicture(true);
       setError("");
 
-      // For now, we'll use a placeholder URL. In production, you'd upload to Cloudinary/S3
       const reader = new FileReader();
       reader.onloadend = async () => {
         const base64String = reader.result as string;
@@ -323,92 +339,6 @@ setUser(userData);
     }
   };
 
-  const handleSaveFullMeasurement = async () => {
-    const token = getToken();
-    if (!token) return;
-
-    try {
-      setSavingMeasurement(true);
-      setError("");
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/measurement-history`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          weight: parseFloat(measurementForm.weight) || 0,
-          chest: parseFloat(measurementForm.chest) || 0,
-          waist: parseFloat(measurementForm.waist) || 0,
-          leftBicep: parseFloat(measurementForm.arms) || 0,
-          rightBicep: parseFloat(measurementForm.arms) || 0,
-          leftThigh: parseFloat(measurementForm.legs) || 0,
-          rightThigh: parseFloat(measurementForm.legs) || 0,
-          bodyFat: 0,
-          muscleMass: 0,
-          shoulders: 0,
-          hips: 0,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to save measurements");
-        return;
-      }
-
-      setSuccessMessage("Measurements saved successfully ✅");
-      setMeasurementForm({
-        weight: "",
-        chest: "",
-        waist: "",
-        arms: "",
-        legs: "",
-      });
-      await fetchUserData();
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch {
-      setError("Something went wrong while saving measurements");
-    } finally {
-      setSavingMeasurement(false);
-    }
-  };
-
-  const handleProgressPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) return;
-
-    try {
-      const formData = new FormData();
-      formData.append("photo", file);
-
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload/progress`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message || "Failed to upload progress photo");
-        return;
-      }
-
-      setSuccessMessage("Progress photo uploaded successfully ✅");
-      await fetchUserData();
-      setTimeout(() => setSuccessMessage(""), 3000);
-    } catch {
-      setError("Something went wrong while uploading progress photo");
-    }
-  };
 
   const handleGenerateAIAudit = async () => {
     const token = localStorage.getItem("token");
@@ -448,7 +378,6 @@ setUser(userData);
       setSavingTraining(true);
       setError("");
 
-      // Log hydration
       if (dailyHydration > 0) {
         await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/health-metrics`, {
           method: "POST",
@@ -463,7 +392,6 @@ setUser(userData);
         });
       }
 
-      // Log sleep
       if (dailySleep > 0) {
         await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/health-metrics`, {
           method: "POST",
@@ -493,7 +421,6 @@ setUser(userData);
 
   const renderHomeTab = () => (
     <div className="space-y-6 pb-24">
-      {/* Header with greeting and profile */}
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-400">Welcome Back,</p>
@@ -502,7 +429,14 @@ setUser(userData);
         <div className="relative">
           <div className="h-14 w-14 overflow-hidden rounded-full border-2 border-green-500 bg-gray-800">
             {user?.profilePicture ? (
-              <img src={user.profilePicture} alt="Profile" className="h-full w-full object-cover" />
+              <Image 
+  src={user.profilePicture || "/fallback-avatar.png"} 
+  alt="Profile" 
+  width={120} 
+  height={120} 
+  className="h-full w-full object-cover rounded-full"
+  priority
+/>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-2xl">
                 👤
@@ -513,7 +447,6 @@ setUser(userData);
         </div>
       </div>
 
-      {/* Access Card */}
       <div className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/10 to-transparent p-6 shadow-lg shadow-red-500/10">
         <p className="text-xs font-semibold uppercase tracking-wider text-red-400">
           Your Access Key
@@ -541,7 +474,6 @@ setUser(userData);
         </div>
       </div>
 
-      {/* Daily Metrics Grid */}
       <div className="grid grid-cols-2 gap-4">
         <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
           <div className="relative h-24 w-24">
@@ -588,7 +520,6 @@ setUser(userData);
         </div>
       </div>
 
-      {/* Membership Status */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
           Membership Status
@@ -620,14 +551,13 @@ setUser(userData);
 
   const renderMeasurementInput = (type: "before" | "after", field: string, label: string) => {
     const currentValue = user?.healthMetrics?.beforeAfterMeasurements?.[type]?.[field as keyof typeof measurementForms.before] || "";
-    const isBefore = type === "before";
 
     return (
       <div className="relative">
         <input
           type="number"
           step="0.1"
-          value={measurementForms[type][field as keyof typeof measurementForms.before] || currentValue}
+          value={measurementForms[type][field as keyof typeof measurementForms.before] ?? currentValue ?? ""}
           onChange={(e) => {
             const newForms = { ...measurementForms };
             newForms[type][field as keyof typeof measurementForms.before] = e.target.value;
@@ -670,7 +600,7 @@ setUser(userData);
             Object.entries(measurements).map(([k, v]) => [k, v ? parseFloat(v) : 0])
           ),
           targetWeight: targetWeight ? parseFloat(targetWeight) : undefined,
-          bmi: calculatedBMI?.bmi || undefined,
+          bmi: manualBMI?.bmi || undefined,
         }),
       });
 
@@ -706,7 +636,7 @@ setUser(userData);
           type,
           measurements: {},
           targetWeight: targetWeight ? parseFloat(targetWeight) : undefined,
-          bmi: calculatedBMI?.bmi || undefined,
+          bmi: manualBMI?.bmi || undefined,
         }),
       });
 
@@ -827,249 +757,216 @@ setUser(userData);
   const calculateProgressPercentage = () => {
     const before = user?.healthMetrics?.beforeAfterMeasurements?.before;
     const after = user?.healthMetrics?.beforeAfterMeasurements?.after;
-    const targetWeight = user?.healthMetrics?.targetWeight || 0;
+    const targetWeightVal = user?.healthMetrics?.targetWeight || 0;
 
     if (!before || !after || !before.weight || !after.weight) return 0;
 
     const beforeWeight = before.weight;
     const afterWeight = after.weight;
 
-    // Calculate absolute deltas (After - Before)
-    const weightDelta = afterWeight - beforeWeight;
-
-    // Calculate target progress percentage: ((beforeWeight - afterWeight) / (beforeWeight - targetWeight)) * 100
-    // Safety guard: if (beforeWeight - targetWeight) === 0, default to 0%
-    const denominator = beforeWeight - targetWeight;
+    const denominator = beforeWeight - targetWeightVal;
     if (denominator === 0) {
-      return 0; // Default to 0% if target equals before weight
+      return 0;
     }
 
     const progress = ((beforeWeight - afterWeight) / denominator) * 100;
-
-    // Handle progress over 100% - cap at 100% for clean display
     return Math.max(0, Math.min(100, progress));
   };
 
-const calculateBodyFatPercentage = () => {
-    // Combine live input form state and database fallback values
-    const savedWeight = user?.healthMetrics?.beforeAfterMeasurements?.after?.weight || 0;
-    const weight = measurementForms.after.weight ? parseFloat(measurementForms.after.weight) : savedWeight;
-    const height = parseFloat(user?.height || "0") || 0;
-
-    if (weight === 0 || height === 0) return 0;
-
-    const heightInMeters = height / 100;
-    const bmi = weight / (heightInMeters * heightInMeters);
-
-    // Standard baseline adult body fat estimation formula
-    const bodyFat = (1.20 * bmi) + (0.23 * 30) - 16.2;
-
-    return Math.max(0, Math.min(100, bodyFat));
-  };
-
-  const renderHealthTab = () => (
+const renderHealthTab = () => (
     <div className="space-y-6 pb-24">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Health & Progress</h1>
-        <p className="text-sm text-gray-400">Track your fitness journey</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Health & Progress</h1>
+          <p className="text-sm text-gray-400">Track your fitness journey manually</p>
+        </div>
+        
+        {/* Action Controls for Modal and AI Features */}
+        <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={() => setHealthModal({ isOpen: true, type: 'weight' })} 
+            className="px-4 py-2 bg-red-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-red-700 transition"
+          >
+            + Log Metric
+          </button>
+          
+          <button 
+            onClick={handleGenerateAIAudit}
+            disabled={loadingAiAudit}
+            className="px-4 py-2 bg-purple-600 text-white text-xs font-bold uppercase tracking-wider rounded-xl hover:bg-purple-700 transition disabled:opacity-50"
+          >
+            {loadingAiAudit ? "Analyzing Profile..." : "🤖 Run AI Audit"}
+          </button>
+        </div>
       </div>
 
-      {/* BMI Calculator */}
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">BMI Calculator</p>
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-3xl font-bold text-white">{calculatedBMI?.bmi || "--"}</p>
-            <p className="text-xs text-gray-400">BMI</p>
+      {/* AI Audit View Display */}
+      {aiAudit && (
+        <div className="p-5 bg-purple-950/20 border border-purple-500/30 rounded-3xl text-purple-300">
+          <h4 className="font-bold mb-2 text-purple-200 flex items-center gap-2">
+            <span>✨</span> AI Coach Analysis
+          </h4>
+          <p className="text-xs leading-relaxed whitespace-pre-line">{aiAudit}</p>
+        </div>
+      )}
+
+      {/* Metric Radial Gauges */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-3xl border border-white/10 bg-[#111116] p-5 flex flex-col items-center justify-center">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">BMI Performance</p>
+          <div className="relative h-28 w-28 flex items-center justify-center">
+            <svg className="absolute inset-0 h-full w-full transform -rotate-90 overflow-visible">
+              <circle cx="56" cy="56" r="48" stroke="rgba(255,255,255,0.05)" strokeWidth="8" fill="none" />
+              <circle
+                cx="56" cy="56" r="48" stroke="#ef4444" strokeWidth="8" fill="none" strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 48}`}
+                strokeDashoffset={`${(2 * Math.PI * 48) - (Math.min(manualBMI?.bmi || 0, 40) / 40) * (2 * Math.PI * 48)}`}
+                className="transition-all duration-500 ease-out"
+              />
+            </svg>
+            <div className="text-center z-10">
+              <p className="text-xl font-black text-white">{manualBMI ? manualBMI.bmi : "--"}</p>
+              <p className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">Score</p>
+            </div>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2">
-            <p className="text-sm font-semibold text-red-400">{calculatedBMI?.category || "Calculating..."}</p>
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-[#111116] p-5 flex flex-col items-center justify-center">
+          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">Body Fat %</p>
+          <div className="relative h-28 w-28 flex items-center justify-center">
+            <svg className="absolute inset-0 h-full w-full transform -rotate-90 overflow-visible">
+              <circle cx="56" cy="56" r="48" stroke="rgba(255,255,255,0.05)" strokeWidth="8" fill="none" />
+              <circle
+                cx="56" cy="56" r="48" stroke="#ef4444" strokeWidth="8" fill="none" strokeLinecap="round"
+                strokeDasharray={`${2 * Math.PI * 48}`}
+                strokeDashoffset={`${(2 * Math.PI * 48) - (Math.min(manualBF || 0, 50) / 50) * (2 * Math.PI * 48)}`}
+                className="transition-all duration-500 ease-out"
+              />
+            </svg>
+            <div className="text-center z-10">
+              <p className="text-xl font-black text-white">{manualBF !== null ? `${manualBF}%` : "--"}</p>
+              <p className="text-[9px] uppercase tracking-widest text-gray-500 font-bold">Navy Seal</p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Target Weight */}
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Target Weight</p>
-        <div className="space-y-2">
-          <div className="relative">
+      {/* Calculators Block */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-3xl border border-white/10 bg-[#111116] p-5 space-y-3">
+          <h4 className="text-xs font-black uppercase tracking-widest text-red-500">BMI Configuration</h4>
+          <div className="grid grid-cols-2 gap-3">
             <input
-              type="number"
-              step="0.1"
-              value={targetWeight || user?.healthMetrics?.targetWeight || ""}
-              onChange={(e) => setTargetWeight(e.target.value)}
-              className="peer w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-transparent focus:border-red-500/50 focus:outline-none"
-              placeholder="Target Weight (kg)"
-              id="target-weight-input"
+              type="number" placeholder="Weight (kg)" value={bmiWeight}
+              onChange={(e) => setBmiWeight(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-red-500"
             />
-            <label
-              htmlFor="target-weight-input"
-              className="absolute left-4 top-3 -translate-y-1/2 text-xs text-gray-400 transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:text-sm peer-placeholder-shown:text-gray-500 peer-focus:-top-2.5 peer-focus:text-xs peer-focus:text-red-400"
-            >
-              Target Weight (kg)
-            </label>
+            <input
+              type="number" placeholder="Height (cm)" value={bmiHeight}
+              onChange={(e) => setBmiHeight(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-red-500"
+            />
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleSaveMeasurement("after")}
-              disabled={savingMeasurement}
-              className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {savingMeasurement ? "Saving..." : "Save Target"}
-            </button>
+          <input
+            type="number" placeholder="Age" value={bmiAge}
+            onChange={(e) => setBmiAge(e.target.value)}
+            className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-red-500"
+          />
+          <button
+            onClick={handleCalculateBMI}
+            className="w-full rounded-xl bg-red-600 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-red-700"
+          >
+            Calculate BMI Parameters
+          </button>
+          {manualBMI && (
+            <p className="text-center text-[11px] text-gray-400">
+              Classification: <span className="text-red-400 font-bold">{manualBMI.category}</span>
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-3xl border border-white/10 bg-[#111116] p-5 space-y-3">
+          <h4 className="text-xs font-black uppercase tracking-widest text-red-500">Body Fat Parameters</h4>
+          <div className="flex gap-2 bg-black/40 p-1 rounded-xl border border-white/10">
+            <button onClick={() => setBfGender("male")} className={`flex-1 py-1 text-xs font-bold rounded-md transition ${bfGender === "male" ? "bg-red-600 text-white" : "text-gray-400"}`}>Male</button>
+            <button onClick={() => setBfGender("female")} className={`flex-1 py-1 text-xs font-bold rounded-md transition ${bfGender === "female" ? "bg-red-600 text-white" : "text-gray-400"}`}>Female</button>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input type="number" placeholder="Height (cm)" value={bfHeight} onChange={(e) => setBfHeight(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none" />
+            <input type="number" placeholder="Neck (cm)" value={bfNeck} onChange={(e) => setBfNeck(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input type="number" placeholder="Waist (cm)" value={bfWaist} onChange={(e) => setBfWaist(e.target.value)} className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none" />
+            <input type="number" placeholder="Hip (cm)" value={bfGender === "male" ? "" : bfHip} onChange={(e) => setBfHip(e.target.value)} disabled={bfGender === "male"} className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white disabled:opacity-30 focus:outline-none" />
+          </div>
+          <button onClick={handleCalculateBodyFat} className="w-full rounded-xl bg-red-600 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-red-700">
+            Calculate Fat Metrics
+          </button>
         </div>
       </div>
 
-      {/* Before/After Measurements Table */}
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Before / After Measurements</p>
+      {/* Measurement Matrix Tracking */}
+      <div className="rounded-3xl border border-white/10 bg-[#111116] p-5">
+        <h3 className="text-sm font-black uppercase tracking-wider text-white mb-4">Measurement Matrix Tracking</h3>
         <div className="grid grid-cols-2 gap-4">
-          {/* Before Column */}
-          <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Before</p>
+          <div className="bg-black/40 border border-white/5 rounded-2xl p-4 space-y-3">
+            <h4 className="text-xs font-black text-red-400 uppercase tracking-widest border-b border-white/5 pb-1">Initial Points</h4>
             <div className="space-y-2">
               {renderMeasurementInput("before", "weight", "Weight (kg)")}
               {renderMeasurementInput("before", "chest", "Chest (cm)")}
               {renderMeasurementInput("before", "waist", "Waist (cm)")}
-              {renderMeasurementInput("before", "leftArm", "Left Arm (cm)")}
-              {renderMeasurementInput("before", "rightArm", "Right Arm (cm)")}
-              {renderMeasurementInput("before", "leftLeg", "Left Leg (cm)")}
-              {renderMeasurementInput("before", "rightLeg", "Right Leg (cm)")}
+              {renderMeasurementInput("before", "leftArm", "L. Arm (cm)")}
+              {renderMeasurementInput("before", "rightArm", "R. Arm (cm)")}
+              {renderMeasurementInput("before", "leftLeg", "L. Leg (cm)")}
+              {renderMeasurementInput("before", "rightLeg", "R. Leg (cm)")}
             </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => handleSaveMeasurement("before")}
-                disabled={savingMeasurement}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingMeasurement ? "Saving..." : "Save"}
-              </button>
-              <button
-                onClick={() => handleDeleteMeasurement("before")}
-                disabled={savingMeasurement}
-                className="flex-1 rounded-xl border border-red-600 px-4 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-600/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Delete
-              </button>
+            <div className="pt-2 flex flex-col gap-2">
+              <button onClick={() => handleSaveMeasurement("before")} className="w-full rounded-xl bg-red-600 py-2 text-xs font-bold text-white hover:bg-red-700 transition">Save Initial</button>
+              <button onClick={() => handleDeleteMeasurement("before")} className="w-full rounded-xl border border-white/10 py-2 text-xs font-bold text-gray-400 hover:bg-white/5 transition">Clear</button>
             </div>
           </div>
-          {/* After Column */}
-          <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">After</p>
+
+          <div className="bg-black/40 border border-white/5 rounded-2xl p-4 space-y-3">
+            <h4 className="text-xs font-black text-green-400 uppercase tracking-widest border-b border-white/5 pb-1">Current Progress</h4>
             <div className="space-y-2">
               {renderMeasurementInput("after", "weight", "Weight (kg)")}
               {renderMeasurementInput("after", "chest", "Chest (cm)")}
               {renderMeasurementInput("after", "waist", "Waist (cm)")}
-              {renderMeasurementInput("after", "leftArm", "Left Arm (cm)")}
-              {renderMeasurementInput("after", "rightArm", "Right Arm (cm)")}
-              {renderMeasurementInput("after", "leftLeg", "Left Leg (cm)")}
-              {renderMeasurementInput("after", "rightLeg", "Right Leg (cm)")}
+              {renderMeasurementInput("after", "leftArm", "L. Arm (cm)")}
+              {renderMeasurementInput("after", "rightArm", "R. Arm (cm)")}
+              {renderMeasurementInput("after", "leftLeg", "L. Leg (cm)")}
+              {renderMeasurementInput("after", "rightLeg", "R. Leg (cm)")}
             </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => handleSaveMeasurement("after")}
-                disabled={savingMeasurement}
-                className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {savingMeasurement ? "Saving..." : "Save"}
-              </button>
-              <button
-                onClick={() => handleDeleteMeasurement("after")}
-                disabled={savingMeasurement}
-                className="flex-1 rounded-xl border border-red-600 px-4 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-600/10 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Delete
-              </button>
+            <div className="pt-2 flex flex-col gap-2">
+              <button onClick={() => handleSaveMeasurement("after")} className="w-full rounded-xl bg-green-600 py-2 text-xs font-bold text-white hover:bg-green-700 transition">Save Current</button>
+              <button onClick={() => handleDeleteMeasurement("after")} className="w-full rounded-xl border border-white/10 py-2 text-xs font-bold text-gray-400 hover:bg-white/5 transition">Clear</button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Before/After Photo Gallery */}
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Before / After Photos</p>
-        <div className="grid grid-cols-2 gap-4">
-          {/* Before Photos */}
-          <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">Before</p>
-            <div className="space-y-3">
-              {renderPhotoUpload("before", "front", "Front")}
-              {renderPhotoUpload("before", "back", "Back")}
-              {renderPhotoUpload("before", "side", "Side")}
+      {/* Progress Photo Section Integrated & Dark Mode Styled */}
+      <div className="mt-4 pt-6 border-t border-white/10">
+        <h3 className="text-sm font-black uppercase tracking-wider text-white mb-4">Progress Photos Portfolio</h3>
+        
+        <div className="grid grid-cols-1 gap-6">
+          {/* Before Section */}
+          <div className="space-y-3 bg-[#111116] border border-white/5 rounded-2xl p-4">
+            <h4 className="text-xs font-black text-red-400 uppercase tracking-widest border-b border-white/5 pb-2">Before Transformation</h4>
+            <div className="grid grid-cols-3 gap-3">
+              {renderPhotoUpload("before", "front", "Front View")}
+              {renderPhotoUpload("before", "side", "Side View")}
+              {renderPhotoUpload("before", "back", "Back View")}
             </div>
           </div>
-          {/* After Photos */}
-          <div>
-            <p className="mb-3 text-xs font-bold uppercase tracking-wider text-gray-500">After</p>
-            <div className="space-y-3">
-              {renderPhotoUpload("after", "front", "Front")}
-              {renderPhotoUpload("after", "back", "Back")}
-              {renderPhotoUpload("after", "side", "Side")}
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Progress Charts */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-          <p className="mb-4 text-sm font-semibold text-gray-400">Progress</p>
-          <div className="flex items-center justify-center">
-            <div className="relative h-32 w-32">
-              <svg className="h-full w-full transform -rotate-90">
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeWidth="8"
-                  fill="none"
-                />
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="#ef4444"
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${(calculateProgressPercentage() / 100) * 352} 352`}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-2xl font-bold text-white">{calculateProgressPercentage().toFixed(0)}%</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-          <p className="mb-4 text-sm font-semibold text-gray-400">Body Fat</p>
-          <div className="flex items-center justify-center">
-            <div className="relative h-32 w-32">
-              <svg className="h-full w-full transform -rotate-90">
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeWidth="8"
-                  fill="none"
-                />
-                <circle
-                  cx="64"
-                  cy="64"
-                  r="56"
-                  stroke="#ef4444"
-                  strokeWidth="8"
-                  fill="none"
-                  strokeDasharray={`${(calculateBodyFatPercentage() / 100) * 352} 352`}
-                  strokeLinecap="round"
-                />
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-2xl font-bold text-white">{calculateBodyFatPercentage().toFixed(0)}%</p>
-              </div>
+          {/* After Section */}
+          <div className="space-y-3 bg-[#111116] border border-white/5 rounded-2xl p-4">
+            <h4 className="text-xs font-black text-green-400 uppercase tracking-widest border-b border-white/5 pb-2">After Transformation</h4>
+            <div className="grid grid-cols-3 gap-3">
+              {renderPhotoUpload("after", "front", "Front View")}
+              {renderPhotoUpload("after", "side", "Side View")}
+              {renderPhotoUpload("after", "back", "Back View")}
             </div>
           </div>
         </div>
@@ -1084,7 +981,6 @@ const calculateBodyFatPercentage = () => {
         <p className="text-sm text-gray-400">Track your daily habits</p>
       </div>
 
-      {/* Hydration Tracker */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -1118,7 +1014,6 @@ const calculateBodyFatPercentage = () => {
         </div>
       </div>
 
-      {/* Sleep Tracker */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
         <div className="mb-4 flex items-center gap-3">
           <span className="text-3xl">😴</span>
@@ -1157,7 +1052,6 @@ const calculateBodyFatPercentage = () => {
         </div>
       </div>
 
-      {/* Daily Checklist */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
         <p className="mb-4 text-sm font-semibold text-gray-400">Daily Checklist</p>
         <div className="space-y-3">
@@ -1166,26 +1060,40 @@ const calculateBodyFatPercentage = () => {
               <span className="text-xl">🏋️</span>
               <span className="text-sm font-semibold text-white">Workout Completed</span>
             </div>
-            <input type="checkbox" className="h-5 w-5 accent-red-500" />
+            <input 
+  type="checkbox" 
+  className="h-5 w-5 accent-red-500" 
+  checked={checklist.workout}
+  onChange={(e) => setChecklist({ ...checklist, workout: e.target.checked })}
+/>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
             <div className="flex items-center gap-3">
               <span className="text-xl">🥗</span>
               <span className="text-sm font-semibold text-white">Healthy Meals</span>
             </div>
-            <input type="checkbox" className="h-5 w-5 accent-red-500" />
+            <input 
+  type="checkbox" 
+  className="h-5 w-5 accent-red-500" 
+  checked={checklist.meals}
+  onChange={(e) => setChecklist({ ...checklist, meals: e.target.checked })}
+/>
           </div>
           <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
             <div className="flex items-center gap-3">
               <span className="text-xl">🧘</span>
               <span className="text-sm font-semibold text-white">Stretching</span>
             </div>
-            <input type="checkbox" className="h-5 w-5 accent-red-500" />
+            <input 
+  type="checkbox" 
+  className="h-5 w-5 accent-red-500" 
+  checked={checklist.stretching}
+  onChange={(e) => setChecklist({ ...checklist, stretching: e.target.checked })}
+/>
           </div>
         </div>
       </div>
 
-      {/* Save Button */}
       <button
         onClick={handleSaveTraining}
         disabled={savingTraining || (dailyHydration === 0 && dailySleep === 0)}
@@ -1203,7 +1111,6 @@ const calculateBodyFatPercentage = () => {
         <p className="text-sm text-gray-400">Manage your account</p>
       </div>
 
-      {/* Profile Picture Upload */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
         <p className="mb-4 text-sm font-semibold text-gray-400">Profile Picture</p>
         <div className="flex items-center gap-4">
@@ -1235,7 +1142,6 @@ const calculateBodyFatPercentage = () => {
         </div>
       </div>
 
-      {/* Account Details Form */}
       <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
         <p className="mb-4 text-sm font-semibold text-gray-400">Account Details</p>
         <div className="space-y-4">
@@ -1313,7 +1219,6 @@ const calculateBodyFatPercentage = () => {
         </div>
       </div>
 
-      {/* Admin Portal Gateway - Only visible for admin users */}
       {user?.role === "admin" && (
         <button
           onClick={() => router.push("/admin")}
@@ -1327,10 +1232,8 @@ const calculateBodyFatPercentage = () => {
         </button>
       )}
 
-      {/* PWA Install Button */}
       <button
         onClick={() => {
-          // Trigger PWA install prompt if available
           const deferredPrompt = (window as any).deferredPrompt;
           if (deferredPrompt) {
             deferredPrompt.prompt();
@@ -1345,7 +1248,6 @@ const calculateBodyFatPercentage = () => {
         <span className="text-gray-400">→</span>
       </button>
 
-      {/* Logout Button */}
       <button
         onClick={handleLogout}
         className="flex w-full items-center justify-between rounded-3xl border border-red-500/30 bg-red-500/10 p-4 transition hover:bg-red-500/20"
@@ -1373,13 +1275,11 @@ const calculateBodyFatPercentage = () => {
   return (
     <PageTransition>
       <main className="min-h-screen bg-[#0B0B0F] text-white">
-        {/* Background Effects */}
         <div className="pointer-events-none fixed inset-0">
           <div className="absolute left-[-100px] top-[-100px] h-[300px] w-[300px] rounded-full bg-red-600/10 blur-3xl" />
           <div className="absolute right-[-100px] bottom-[-100px] h-[300px] w-[300px] rounded-full bg-red-600/5 blur-3xl" />
         </div>
 
-        {/* Header */}
         <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0B0B0F]/80 backdrop-blur-lg px-4 py-4">
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold">
@@ -1395,7 +1295,6 @@ const calculateBodyFatPercentage = () => {
           </div>
         </header>
 
-        {/* Content */}
         <div className="px-4 py-6">
           {error && (
             <div className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-red-300">
@@ -1415,7 +1314,6 @@ const calculateBodyFatPercentage = () => {
           {activeTab === "profile" && renderProfileTab()}
         </div>
 
-        {/* Bottom Navigation */}
         <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#0B0B0F]/95 backdrop-blur-lg">
           <div className="flex justify-around px-2 py-2">
             <button
@@ -1460,7 +1358,6 @@ const calculateBodyFatPercentage = () => {
           </div>
         </nav>
 
-        {/* Health Metric Modal */}
         {healthModal.isOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
             <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#16161F] p-6">
@@ -1515,7 +1412,6 @@ const calculateBodyFatPercentage = () => {
           </div>
         )}
 
-        {/* Photo Expansion Modal */}
         {expandedPhoto && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-sm px-4">
             <div className="relative w-full max-w-3xl">
@@ -1533,7 +1429,7 @@ const calculateBodyFatPercentage = () => {
             </div>
           </div>
         )}
-    </main>
-      </PageTransition>
+      </main>
+    </PageTransition>
   );
 }
