@@ -74,11 +74,12 @@ export default function MobileDashboardPage() {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  // Profile form state
+// Profile form state
   const [profileForm, setProfileForm] = useState({
     fullName: "",
     mobileNumber: "",
     fitnessGoals: "",
+    height: "", // Added height tracking here
   });
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -133,28 +134,33 @@ export default function MobileDashboardPage() {
     fetchUserData();
   }, []);
 
-  // Calculate BMI dynamically when weight or height changes
+ // Calculate BMI dynamically when weight or height changes
   useEffect(() => {
-    if (user?.height && measurementForms.after.weight) {
-      const heightInMeters = parseFloat(user.height) / 100; // Convert cm to meters
-      const weight = parseFloat(measurementForms.after.weight);
+    // Fallback logic: check live typing input first, otherwise read what's already saved in MongoDB
+    const savedWeight = user?.healthMetrics?.beforeAfterMeasurements?.after?.weight?.toString() || "";
+    const currentWeight = measurementForms.after.weight || savedWeight;
+    const currentHeight = user?.height || "";
+
+    if (currentHeight && currentWeight) {
+      const heightInMeters = parseFloat(currentHeight) / 100;
+      const weight = parseFloat(currentWeight);
       
       if (heightInMeters > 0 && weight > 0) {
         const bmi = weight / (heightInMeters * heightInMeters);
         let category = "";
-        if (bmi < 18.5) {
-          category = "Underweight";
-        } else if (bmi >= 18.5 && bmi < 25) {
-          category = "Normal";
-        } else if (bmi >= 25 && bmi < 30) {
-          category = "Overweight";
-        } else {
-          category = "Obese";
-        }
+        if (bmi < 18.5) category = "Underweight";
+        else if (bmi >= 18.5 && bmi < 25) category = "Normal";
+        else if (bmi >= 25 && bmi < 30) category = "Overweight";
+        else category = "Obese";
+        
         setCalculatedBMI({ bmi: parseFloat(bmi.toFixed(1)), category });
+      } else {
+        setCalculatedBMI(null);
       }
+    } else {
+      setCalculatedBMI(null);
     }
-  }, [measurementForms.after.weight, user?.height]);
+  }, [measurementForms.after.weight, user]);
 
   const fetchUserData = async () => {
     const token = getToken();
@@ -180,11 +186,12 @@ export default function MobileDashboardPage() {
         return;
       }
 
-      setUser(userData);
+setUser(userData);
       setProfileForm({
         fullName: userData.fullName || "",
         mobileNumber: userData.mobileNumber || "",
         fitnessGoals: userData.fitnessGoals || "",
+        height: userData.height || "", // Added height loading here
       });
     } catch {
       setError("Failed to load dashboard");
@@ -843,11 +850,10 @@ export default function MobileDashboardPage() {
     return Math.max(0, Math.min(100, progress));
   };
 
-  const calculateBodyFatPercentage = () => {
-    const measurements = user?.healthMetrics?.beforeAfterMeasurements?.after;
-    if (!measurements) return 0;
-
-    const weight = measurements.weight || 0;
+const calculateBodyFatPercentage = () => {
+    // Combine live input form state and database fallback values
+    const savedWeight = user?.healthMetrics?.beforeAfterMeasurements?.after?.weight || 0;
+    const weight = measurementForms.after.weight ? parseFloat(measurementForms.after.weight) : savedWeight;
     const height = parseFloat(user?.height || "0") || 0;
 
     if (weight === 0 || height === 0) return 0;
@@ -855,6 +861,7 @@ export default function MobileDashboardPage() {
     const heightInMeters = height / 100;
     const bmi = weight / (heightInMeters * heightInMeters);
 
+    // Standard baseline adult body fat estimation formula
     const bodyFat = (1.20 * bmi) + (0.23 * 30) - 16.2;
 
     return Math.max(0, Math.min(100, bodyFat));
@@ -1026,7 +1033,7 @@ export default function MobileDashboardPage() {
                   stroke="#ef4444"
                   strokeWidth="8"
                   fill="none"
-                  strokeDasharray={`${calculateProgressPercentage()} 352`}
+                  strokeDasharray={`${(calculateProgressPercentage() / 100) * 352} 352`}
                   strokeLinecap="round"
                 />
               </svg>
@@ -1056,7 +1063,7 @@ export default function MobileDashboardPage() {
                   stroke="#ef4444"
                   strokeWidth="8"
                   fill="none"
-                  strokeDasharray={`${calculateBodyFatPercentage()} 352`}
+                  strokeDasharray={`${(calculateBodyFatPercentage() / 100) * 352} 352`}
                   strokeLinecap="round"
                 />
               </svg>
@@ -1267,6 +1274,19 @@ export default function MobileDashboardPage() {
               onChange={(e) => setProfileForm({ ...profileForm, mobileNumber: e.target.value })}
               className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
               placeholder="Enter your phone number"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
+              Height (cm)
+            </label>
+            <input
+              type="number"
+              value={profileForm.height}
+              onChange={(e) => setProfileForm({ ...profileForm, height: e.target.value })}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
+              placeholder="Enter your height in cm"
             />
           </div>
 
