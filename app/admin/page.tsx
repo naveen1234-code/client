@@ -236,19 +236,83 @@ export default function AdminPage() {
 
 
 
-  const [smartMembershipForm, setSmartMembershipForm] = useState<SmartMembershipFormType>({
-  userId: "",
-  membershipStatus: "active",
-  membershipPlan: "1 Month",
-  membershipStartDate: "",
-});
+ // Helper to get local date string (YYYY-MM-DD)
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
-const [smartMembershipOverrides, setSmartMembershipOverrides] =
-  useState<SmartMembershipOverridesType>({
-    totalDays: "",
-    remainingDays: "",
+  const [smartMembershipForm, setSmartMembershipForm] = useState<SmartMembershipFormType>({
+    userId: "",
+    membershipStatus: "active",
+    membershipPlan: "1 Month",
+    membershipStartDate: getTodayString(), // Defaults to today automatically
+  });
+
+  const [smartMembershipOverrides, setSmartMembershipOverrides] = useState<SmartMembershipOverridesType>({
+    totalDays: "30",
+    remainingDays: "30",
     membershipEndDate: "",
   });
+
+ // Dedicated search states for the form lookups
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  // Filter members based on typed text input
+  const searchedDropdownMembers = useMemo(() => {
+    if (!memberSearchQuery.trim()) return users;
+    return users.filter((user) => {
+      const displayName = (user.fullName || user.name || "").toLowerCase();
+      return (
+        displayName.includes(memberSearchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(memberSearchQuery.toLowerCase())
+      );
+    });
+  }, [users, memberSearchQuery]);
+
+  // Dedicated search states for the Manual Payment form
+  const [manualSearchQuery, setManualSearchQuery] = useState("");
+  const [showManualDropdown, setShowManualDropdown] = useState(false);
+
+  const searchedManualMembers = useMemo(() => {
+    if (!manualSearchQuery.trim()) return users;
+    return users.filter((user) => {
+      const displayName = (user.fullName || user.name || "").toLowerCase();
+      return (
+        displayName.includes(manualSearchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(manualSearchQuery.toLowerCase())
+      );
+    });
+  }, [users, manualSearchQuery]);
+
+  // AUTOMATION ENGINE: Automatically calculate End Date & Days based on Plan and Start Date
+  useEffect(() => {
+    if (!smartMembershipForm.membershipStartDate) return;
+
+    let daysToAdd = 30;
+    if (smartMembershipForm.membershipPlan === "3 Months") daysToAdd = 90;
+    if (smartMembershipForm.membershipPlan === "6 Months") daysToAdd = 180;
+    if (smartMembershipForm.membershipPlan === "1 Year") daysToAdd = 365;
+
+    const startDate = new Date(smartMembershipForm.membershipStartDate);
+    const endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + daysToAdd);
+
+    const year = endDate.getFullYear();
+    const month = String(endDate.getMonth() + 1).padStart(2, "0");
+    const day = String(endDate.getDate()).padStart(2, "0");
+    const formattedEndDate = `${year}-${month}-${day}`;
+
+    setSmartMembershipOverrides({
+      totalDays: String(daysToAdd),
+      remainingDays: String(daysToAdd), // Synchronized visual count
+      membershipEndDate: formattedEndDate,
+    });
+  }, [smartMembershipForm.membershipPlan, smartMembershipForm.membershipStartDate]);
 
 const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
 
@@ -804,7 +868,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   };
 
   const handleSmartMembershipUpdate = async () => {
-  const token = localStorage.getItem("token");
+  const token = getToken();
 
   if (!token) {
     setError("No token found");
@@ -948,20 +1012,36 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
       setError("");
       setSuccessMessage("");
 
+      // --- ONE-CLICK AUTOMATION LOGIC ---
+      const todayString = getTodayString();
+      const daysToAdd = getPlanDays(manualPaymentForm.planName);
+      let calculatedEndDate = "";
+      
+      if (daysToAdd > 0) {
+        const endDateObj = new Date(todayString);
+        endDateObj.setDate(endDateObj.getDate() + daysToAdd);
+        calculatedEndDate = endDateObj.toISOString().split("T")[0];
+      }
+      
+      const payload = {
+        userId: manualPaymentForm.userId,
+        planName: manualPaymentForm.planName,
+        amount: Number(manualPaymentForm.amount),
+        paymentMethod: manualPaymentForm.paymentMethod,
+        transactionId: manualPaymentForm.transactionId,
+        notes: manualPaymentForm.notes,
+        membershipStartDate: todayString, // Automatically attached
+        membershipEndDate: calculatedEndDate, // Automatically attached
+      };
+      // -----------------------------------
+
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/payments/manual`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          userId: manualPaymentForm.userId,
-          planName: manualPaymentForm.planName,
-          amount: Number(manualPaymentForm.amount),
-          paymentMethod: manualPaymentForm.paymentMethod,
-          transactionId: manualPaymentForm.transactionId,
-          notes: manualPaymentForm.notes,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -975,6 +1055,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         `Manual payment recorded successfully ✅ Receipt: ${data.payment?.receiptNumber || "Generated"}`
       );
 
+      // Reset the form and the search UI
       setManualPaymentForm({
         userId: "",
         planName: "1 Month",
@@ -983,10 +1064,12 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         transactionId: "",
         notes: "",
       });
+      setManualSearchQuery(""); // Clear the UI text input
 
       await refreshUsers();
       await fetchMonthlyStatement(statementYear, statementMonth);
     } catch {
+      // ...
       setError("Something went wrong while recording manual payment");
     } finally {
       setManualPaymentLoading(false);
@@ -1034,15 +1117,17 @@ const handleSmartMemberSelect = (userId: string) => {
 
   if (!user) {
     resetSmartMembershipBuilder();
+    setMemberSearchQuery("");
     return;
   }
 
   loadSmartMembershipFromUser(user);
+  setMemberSearchQuery(`${user.fullName || user.name} — ${user.email}`);
   setSuccessMessage("");
   setError("");
 };
 
-  const handleSelectUser = (user: UserType) => {
+const handleSelectUser = (user: UserType) => {
   setManualPaymentForm((prev) => ({
     ...prev,
     userId: user._id,
@@ -1052,6 +1137,7 @@ const handleSmartMemberSelect = (userId: string) => {
   setSuccessMessage("");
   setError("");
   loadSmartMembershipFromUser(user);
+  setMemberSearchQuery(`${user.fullName || user.name} — ${user.email}`);
 };
 
   const handleBookingStatusUpdate = async (
@@ -2753,23 +2839,51 @@ const integrationStatusCards = useMemo(
 
   <div className="mt-6 space-y-6">
     <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-      <div className="rounded-[24px] border border-white/10 bg-black/25 p-5">
+      <div className="relative rounded-[24px] border border-white/10 bg-black/25 p-5">
         <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-cyan-300">
-          Select Member
+          Search & Select Member
         </label>
 
-        <select
-          value={smartMembershipForm.userId}
-          onChange={(e) => handleSmartMemberSelect(e.target.value)}
+        <input
+          type="text"
+          placeholder="Type member name or email..."
+          value={memberSearchQuery}
+          onChange={(e) => {
+            setMemberSearchQuery(e.target.value);
+            setShowDropdown(true);
+          }}
+          onFocus={() => setShowDropdown(true)}
           className="mt-3 w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-cyan-500"
-        >
-          <option value="">Choose Member</option>
-          {users.map((user) => (
-            <option key={user._id} value={user._id}>
-              {(user.fullName || user.name) + " — " + user.email}
-            </option>
-          ))}
-        </select>
+        />
+
+        {showDropdown && (
+          <>
+            <div 
+              className="fixed inset-0 z-40" 
+              onClick={() => setShowDropdown(false)} 
+            />
+            <div className="absolute left-5 right-5 mt-2 max-h-60 overflow-y-auto rounded-2xl border border-white/15 bg-[#121212] p-2 shadow-2xl z-50">
+              {searchedDropdownMembers.length === 0 ? (
+                <p className="p-3 text-xs text-gray-500">No matching members found</p>
+              ) : (
+                searchedDropdownMembers.map((user) => (
+                  <button
+                    key={user._id}
+                    type="button"
+                    onClick={() => {
+                      handleSmartMemberSelect(user._id);
+                      setShowDropdown(false);
+                    }}
+                    className="w-full text-left rounded-xl px-4 py-3 text-sm text-gray-200 transition hover:bg-white/5 hover:text-white"
+                  >
+                    {user.fullName || user.name}
+                    <span className="block text-xs text-gray-500 break-all">{user.email}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-4">
@@ -3082,18 +3196,48 @@ const integrationStatusCards = useMemo(
                 </h2>
 
                 <div className="mt-6 grid gap-4 md:grid-cols-2">
-                  <input
-                    type="text"
-                    placeholder="Member User ID"
-                    value={manualPaymentForm.userId}
-                    onChange={(e) =>
-                      setManualPaymentForm({
-                        ...manualPaymentForm,
-                        userId: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
-                  />
+                  <div className="relative w-full">
+                    <input
+                      type="text"
+                      placeholder="Search member name or email..."
+                      value={manualSearchQuery}
+                      onChange={(e) => {
+                        setManualSearchQuery(e.target.value);
+                        setShowManualDropdown(true);
+                      }}
+                      onFocus={() => setShowManualDropdown(true)}
+                      className="w-full rounded-2xl border border-white/10 bg-black/60 px-4 py-4 text-white outline-none transition focus:border-red-500"
+                    />
+                    {showManualDropdown && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setShowManualDropdown(false)} 
+                        />
+                        <div className="absolute left-0 right-0 mt-2 max-h-60 overflow-y-auto rounded-2xl border border-white/15 bg-[#121212] p-2 shadow-2xl z-50">
+                          {searchedManualMembers.length === 0 ? (
+                            <p className="p-3 text-xs text-gray-500">No matching members found</p>
+                          ) : (
+                            searchedManualMembers.map((user) => (
+                              <button
+                                key={user._id}
+                                type="button"
+                                onClick={() => {
+                                  handleSelectUser(user);
+                                  setManualSearchQuery(`${user.fullName || user.name} — ${user.email}`);
+                                  setShowManualDropdown(false);
+                                }}
+                                className="w-full text-left rounded-xl px-4 py-3 text-sm text-gray-200 transition hover:bg-white/5 hover:text-white"
+                              >
+                                {user.fullName || user.name}
+                                <span className="block text-xs text-gray-500 break-all">{user.email}</span>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
 
                   <select
                     value={manualPaymentForm.planName}
@@ -3316,7 +3460,7 @@ const integrationStatusCards = useMemo(
                               Amount
                             </p>
                             <p className="mt-2 text-sm font-semibold text-green-400">
-                              LKR {payment.amount.toLocaleString()}
+                              LKR {(payment.amount || 0).toLocaleString()}
                             </p>
                           </div>
 
@@ -3646,10 +3790,10 @@ const integrationStatusCards = useMemo(
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <p className="text-base font-black uppercase tracking-[0.08em] text-white">
-                          {claim.userId.name}
+                          {claim.userId?.name || "Deleted User"}
                         </p>
                         <p className="mt-1 break-all text-sm text-gray-400">
-                          {claim.userId.email}
+                          {claim.userId?.email || "No Email Found"}
                         </p>
                       </div>
 
@@ -4255,6 +4399,7 @@ const integrationStatusCards = useMemo(
                 <button type="button" onClick={() => scrollToSection("manual-payment")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Manual Payment</button>
                 <button type="button" onClick={() => scrollToSection("monthly-statement")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Monthly Statement</button>
                 <button type="button" onClick={() => scrollToSection("latest-members")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Latest Members</button>
+                <button type="button" onClick={() => scrollToSection("legacy-claims")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Legacy Claims</button>
                 <button type="button" onClick={() => scrollToSection("latest-bookings")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Latest Bookings</button>
                 <button type="button" onClick={() => scrollToSection("receipt-placeholder")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Receipts & Invoices</button>
                 <button type="button" onClick={() => scrollToSection("analytics-placeholder")} className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10">Analytics</button>

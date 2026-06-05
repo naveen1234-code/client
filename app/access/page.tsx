@@ -419,135 +419,230 @@ export default function MobileDashboardPage() {
     }
   };
 
-  const renderHomeTab = () => (
-    <div className="space-y-6 pb-24">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-400">Welcome Back,</p>
-          <h1 className="text-2xl font-bold text-white">{user?.name || "Member"} 👋</h1>
-        </div>
-        <div className="relative">
-          <div className="h-14 w-14 overflow-hidden rounded-full border-2 border-green-500 bg-gray-800">
-            {user?.profilePicture ? (
-              <Image 
-  src={user.profilePicture || "/fallback-avatar.png"} 
-  alt="Profile" 
-  width={120} 
-  height={120} 
-  className="h-full w-full object-cover rounded-full"
-  priority
-/>
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-2xl">
-                👤
-              </div>
-            )}
-          </div>
-          <div className="absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-[#0B0B0F] bg-green-500" />
-        </div>
-      </div>
+  const renderHomeTab = () => {
+    // 1. Dynamic Time-Zone Logic (Asia/Colombo)
+    const colomboTimeString = new Date().toLocaleString("en-US", { timeZone: "Asia/Colombo", hour12: false });
+    const currentHour = new Date(colomboTimeString).getHours();
+    
+    let greeting = "Late Night Hustle";
+    let greetingEmoji = "🌙";
+    
+    if (currentHour >= 5 && currentHour < 12) {
+      greeting = "Morning Grind";
+      greetingEmoji = "🌅";
+    } else if (currentHour >= 12 && currentHour < 17) {
+      greeting = "Afternoon Session";
+      greetingEmoji = "⚡";
+    }
 
-      <div className="rounded-3xl border border-red-500/30 bg-gradient-to-br from-red-500/10 to-transparent p-6 shadow-lg shadow-red-500/10">
-        <p className="text-xs font-semibold uppercase tracking-wider text-red-400">
-          Your Access Key
-        </p>
-        <div className="mt-4 flex items-center justify-center rounded-2xl border border-white/10 bg-black/40 p-6">
-          <div className="text-center">
-            <div className="mb-2 text-4xl">📱</div>
-            <p className="text-sm text-gray-400">Scan QR at gym entrance</p>
-            <p className="mt-2 text-xs text-gray-500">Member ID: {user?._id?.slice(-8)}</p>
-          </div>
-        </div>
-        <div className="mt-4 flex gap-3">
-          <button
-            onClick={() => router.push("/check-in")}
-            className="flex-1 rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700"
-          >
-            Scan Entry
-          </button>
-          <button
-            onClick={() => router.push("/check-in")}
-            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-red-500/30 hover:bg-red-500/10"
-          >
-            Scan Exit
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-          <div className="relative h-24 w-24">
-            <svg className="h-full w-full transform -rotate-90">
-              <circle cx="48" cy="48" r="40" stroke="#1f1f2e" strokeWidth="8" fill="none" />
-              <circle
-                cx="48"
-                cy="48"
-                r="40"
-                stroke="#22c55e"
-                strokeWidth="8"
-                fill="none"
-                strokeDasharray={`${(user?.remainingDays || 0) / (user?.totalDays || 1) * 251} 251`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">{user?.remainingDays || 0}</span>
-            </div>
-          </div>
-          <p className="mt-3 text-center text-sm font-semibold text-gray-400">Remaining Days</p>
-        </div>
-
-        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-          <div className="relative h-24 w-24">
-            <svg className="h-full w-full transform -rotate-90">
-              <circle cx="48" cy="48" r="40" stroke="#1f1f2e" strokeWidth="8" fill="none" />
-              <circle
-                cx="48"
-                cy="48"
-                r="40"
-                stroke="#3b82f6"
-                strokeWidth="8"
-                fill="none"
-                strokeDasharray={`${Math.min((user?.attendanceCount || 0) / 30 * 251, 251)} 251`}
-                strokeLinecap="round"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-white">{user?.attendanceCount || 0}</span>
-            </div>
-          </div>
-          <p className="mt-3 text-center text-sm font-semibold text-gray-400">Attendance</p>
-        </div>
-      </div>
-
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-          Membership Status
-        </p>
-        <div className="mt-3 flex items-center justify-between">
+    return (
+      <div className="space-y-6 pb-24">
+        {/* Dynamic Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <p className="text-xl font-bold text-white">{user?.membershipPlan || "No Plan"}</p>
-            <p className="text-sm text-gray-400">
-              {user?.membershipEndDate
-                ? `Expires: ${new Date(user.membershipEndDate).toLocaleDateString()}`
-                : "No expiration date"}
-            </p>
+            <p className="text-xs font-black uppercase tracking-widest text-gray-500">{greeting} {greetingEmoji}</p>
+            <h2 className="text-2xl font-black text-white">{user?.name || "Member"}</h2>
           </div>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase ${
-              user?.membershipStatus === "active"
-                ? "bg-green-500/20 text-green-400"
-                : user?.membershipStatus === "expired"
-                ? "bg-red-500/20 text-red-400"
-                : "bg-yellow-500/20 text-yellow-400"
-            }`}
-          >
-            {user?.membershipStatus}
-          </span>
+          <div className="relative">
+            <div className="h-12 w-12 overflow-hidden rounded-full border border-gray-700 bg-black shadow-[0_0_15px_-3px_rgba(255,255,255,0.1)]">
+              {user?.profilePicture ? (
+                <Image 
+                  src={user.profilePicture || "/fallback-avatar.png"} 
+                  alt="Profile" 
+                  width={120} 
+                  height={120} 
+                  // FIX 1: Removed grayscale classes. Now full color by default!
+                  className="h-full w-full object-cover rounded-full transition-all duration-500"
+                  priority
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xl">👤</div>
+              )}
+            </div>
+            <div className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-[#0B0B0F] bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+          </div>
         </div>
+
+        {/* 2. The Carbon Fiber VIP Access Card */}
+        <button
+          onClick={() => router.push("/check-in")}
+          className="group relative w-full overflow-hidden rounded-3xl bg-[#0a0a0c] border border-white/5 text-left shadow-[0_15px_35px_rgba(0,0,0,0.8)] transition-all active:scale-[0.98]"
+        >
+          {/* Custom inline style for the continuous infinite sweep animation */}
+          <style>{`
+            @keyframes continuousSweep {
+              0% { transform: translateX(-150%) skewX(-30deg); }
+              50%, 100% { transform: translateX(150%) skewX(-30deg); }
+            }
+          `}</style>
+
+          {/* Carbon Fiber CSS Pattern Overlay */}
+          <div className="absolute inset-0 opacity-30 bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(255,255,255,0.03)_2px,rgba(255,255,255,0.03)_4px)]" />
+          
+          {/* FIX 2: The Continuous Chrome Sweeping Effect */}
+          <div 
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent" 
+            style={{ animation: 'continuousSweep 3s linear infinite' }}
+          />
+
+          <div className="relative z-10 flex flex-col justify-between p-7 space-y-6">
+            {/* Top Row */}
+            <div className="flex items-start justify-between border-b border-white/5 pb-4">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Tier Status</p>
+                <p className="text-sm font-bold text-gray-300">{user?.membershipPlan || "Standard Access"}</p>
+              </div>
+              <div className="text-right">
+                <span className={`inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[9px] font-black uppercase tracking-widest ${
+                  user?.membershipStatus === "active" ? "bg-green-500/10 text-green-400" : 
+                  user?.membershipStatus === "expired" ? "bg-red-500/10 text-red-400" : 
+                  "bg-yellow-500/10 text-yellow-400"
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${user?.membershipStatus === "active" ? "bg-green-400 animate-pulse" : "bg-red-400"}`}></span>
+                  {user?.membershipStatus}
+                </span>
+                <p className="mt-1 text-[10px] font-mono tracking-wider text-gray-600">
+                  {user?._id?.slice(-8) || "--------"}
+                </p>
+              </div>
+            </div>
+
+            {/* Center: Deliberate Metallic Scanner */}
+            <div className="flex flex-col items-center justify-center py-2">
+              <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-b from-[#1a1a24] to-[#0a0a0c] border border-gray-600/30 shadow-[inset_0_2px_10px_rgba(255,255,255,0.05),0_0_20px_rgba(0,0,0,0.5)]">
+                {/* Slow breathing pulse */}
+                <div className="absolute inset-0 rounded-full border border-gray-400/20 animate-[pulse_3s_ease-in-out_infinite]" />
+                {/* Metallic Fingerprint/Scan Icon */}
+                <svg className="h-8 w-8 text-gray-400 group-hover:text-white transition-colors duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+              </div>
+              {/* FIX 3: Clear pulsating "PRESS HERE TO SCAN" label */}
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-white animate-pulse">Press Here To Scan</p>
+            </div>
+          </div>
+        </button>
+
+        {/* 3. High-Tech Command Center (Quick Actions) - Optimized for all screens */}
+        <div>
+          <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-gray-600 pl-1">Command Center</p>
+          <div className="flex flex-wrap gap-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <button 
+              onClick={() => setActiveTab("training")}
+              className="flex flex-1 min-w-[40%] items-center justify-center gap-2 rounded-2xl border border-white/5 bg-[#121216] py-3 text-xs font-bold text-gray-400 hover:bg-[#1a1a20] hover:text-white transition-colors shadow-lg"
+            >
+              <span className="text-blue-400">💧</span> Water
+            </button>
+            <button 
+              onClick={() => setActiveTab("health")}
+              className="flex flex-1 min-w-[40%] items-center justify-center gap-2 rounded-2xl border border-white/5 bg-[#121216] py-3 text-xs font-bold text-gray-400 hover:bg-[#1a1a20] hover:text-white transition-colors shadow-lg"
+            >
+              <span className="text-red-400">⚖️</span> Weight
+            </button>
+            <button 
+              onClick={() => setActiveTab("health")}
+              className="flex flex-1 min-w-[40%] items-center justify-center gap-2 rounded-2xl border border-white/5 bg-[#121216] py-3 text-xs font-bold text-gray-400 hover:bg-[#1a1a20] hover:text-white transition-colors shadow-lg"
+            >
+              <span className="text-purple-400">🤖</span> AI Coach
+            </button>
+          </div>
+        </div>
+
+        {/* FIX 4: Swapped System Telemetry to be ABOVE Daily Objectives */}
+        {/* HUD Dashboard Dials */}
+        <div className="rounded-3xl border border-white/5 bg-[#0e0e12] p-5 shadow-lg">
+          <p className="mb-4 text-[10px] font-black uppercase tracking-widest text-gray-500 text-center">System Telemetry</p>
+          
+          <div className="flex items-center justify-around">
+            {/* Dial 1: Remaining Days */}
+            <div className="flex flex-col items-center">
+              <div className="relative h-24 w-24">
+                {/* Tick marks behind the circle */}
+                <svg className="absolute inset-0 h-full w-full transform -rotate-90">
+                  <circle cx="48" cy="48" r="40" stroke="#1f1f2e" strokeWidth="2" strokeDasharray="4 6" fill="none" />
+                </svg>
+                {/* Glowing Progress */}
+                <svg className="h-full w-full transform -rotate-90 drop-shadow-[0_0_12px_rgba(34,197,94,0.5)]">
+                  <circle cx="48" cy="48" r="40" stroke="#111" strokeWidth="6" fill="none" />
+                  <circle
+                    cx="48" cy="48" r="40" stroke="#22c55e" strokeWidth="6" fill="none"
+                    strokeDasharray={`${(user?.remainingDays || 0) / (user?.totalDays || 1) * 251} 251`}
+                    strokeLinecap="round"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center flex-col">
+                  <span className="text-2xl font-black text-white leading-none">{user?.remainingDays || 0}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Days Left</p>
+            </div>
+
+            {/* Dial 2: Attendance */}
+            <div className="flex flex-col items-center">
+              <div className="relative h-24 w-24">
+                {/* Tick marks behind the circle */}
+                <svg className="absolute inset-0 h-full w-full transform -rotate-90">
+                  <circle cx="48" cy="48" r="40" stroke="#1f1f2e" strokeWidth="2" strokeDasharray="4 6" fill="none" />
+                </svg>
+                {/* Glowing Progress */}
+                <svg className="h-full w-full transform -rotate-90 drop-shadow-[0_0_12px_rgba(59,130,246,0.5)]">
+                  <circle cx="48" cy="48" r="40" stroke="#111" strokeWidth="6" fill="none" />
+                  <circle
+                    cx="48" cy="48" r="40" stroke="#3b82f6" strokeWidth="6" fill="none"
+                    strokeDasharray={`${Math.min((user?.attendanceCount || 0) / 30 * 251, 251)} 251`}
+                    strokeLinecap="round"
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center flex-col">
+                  <span className="text-2xl font-black text-white leading-none">{user?.attendanceCount || 0}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Visits</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Gamified Daily Quests */}
+        <div className="rounded-3xl border border-white/5 bg-[#0e0e12] p-5 shadow-lg">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-[10px] font-black uppercase tracking-widest text-gray-500">Daily Objectives</p>
+            <span className="text-[10px] font-bold text-green-500 bg-green-500/10 px-2 py-0.5 rounded-sm">
+              {Object.values(checklist).filter(Boolean).length}/3 Complete
+            </span>
+          </div>
+          <div className="space-y-2">
+            {[
+              { id: 'workout', label: 'Complete Daily Training', icon: '🏋️‍♂️', color: 'text-red-400' },
+              { id: 'meals', label: 'Log Nutrition / Macros', icon: '🥩', color: 'text-orange-400' },
+              { id: 'stretching', label: 'Recovery & Mobility', icon: '🧘‍♂️', color: 'text-blue-400' }
+            ].map((quest) => (
+              <label key={quest.id} className={`flex cursor-pointer items-center justify-between rounded-xl border border-white/5 p-3 transition-colors ${checklist[quest.id as keyof typeof checklist] ? 'bg-green-900/10 border-green-500/20' : 'bg-[#141419] hover:bg-[#1a1a20]'}`}>
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm ${quest.color}`}>{quest.icon}</span>
+                  <span className={`text-xs font-bold ${checklist[quest.id as keyof typeof checklist] ? 'text-gray-500 line-through' : 'text-gray-300'}`}>
+                    {quest.label}
+                  </span>
+                </div>
+                <div className={`flex h-5 w-5 items-center justify-center rounded border ${checklist[quest.id as keyof typeof checklist] ? 'border-green-500 bg-green-500' : 'border-gray-600 bg-transparent'}`}>
+                  {checklist[quest.id as keyof typeof checklist] && <svg className="h-3 w-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                </div>
+                {/* Hidden input to reuse existing state logic */}
+                <input 
+                  type="checkbox" 
+                  className="hidden" 
+                  checked={checklist[quest.id as keyof typeof checklist]}
+                  onChange={(e) => setChecklist({ ...checklist, [quest.id]: e.target.checked })}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderMeasurementInput = (type: "before" | "after", field: string, label: string) => {
     const currentValue = user?.healthMetrics?.beforeAfterMeasurements?.[type]?.[field as keyof typeof measurementForms.before] || "";
