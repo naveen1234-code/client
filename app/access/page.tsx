@@ -112,6 +112,32 @@ export default function MobileDashboardPage() {
   const [dailySleep, setDailySleep] = useState(0);
   const [savingTraining, setSavingTraining] = useState(false);
 
+  // --- NEW DIGITAL WORKOUT CARD STATES ---
+  type WorkoutItem = {
+    id: string;
+    exercise: string;
+    sets: number;
+    reps: number;
+    weight: string;
+    isCompleted?: boolean;
+  };
+
+  const [workoutRoutine, setWorkoutRoutine] = useState<WorkoutItem[]>([
+    { id: "1", exercise: "Bench Press", sets: 4, reps: 10, weight: "60kg", isCompleted: false },
+    { id: "2", exercise: "Squats", sets: 4, reps: 12, weight: "80kg", isCompleted: false },
+    { id: "3", exercise: "Pullups", sets: 3, reps: 8, weight: "BW", isCompleted: false },
+  ]);
+  const [isSavingRoutine, setIsSavingRoutine] = useState(false);
+
+  // --- REST HUD TIMER STATES ---
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerActive, setTimerActive] = useState(false);
+
+  // --- 1RM CALCULATOR STATES ---
+  const [ormWeight, setOrmWeight] = useState("");
+  const [ormReps, setOrmReps] = useState("");
+  const [calculatedOrm, setCalculatedOrm] = useState<number | null>(null);
+
   // Profile picture upload state
   const [uploadingPicture, setUploadingPicture] = useState(false);
 
@@ -175,9 +201,48 @@ export default function MobileDashboardPage() {
     setManualBF(bodyFat > 0 ? Math.round(bodyFat * 10) / 10 : 0);
   };
 
+  const fetchSavedRoutine = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/routine`, {
+        method: 'GET',
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data && data.routine && data.routine.length > 0) {
+          setWorkoutRoutine(data.routine);
+        }
+      }
+    } catch (err) {
+      console.error("Error pulling routine:", err);
+    }
+  };
+
   useEffect(() => {
     fetchUserData();
+    fetchSavedRoutine(); // This tells the app to load your exercises on refresh
   }, []);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+    if (timerActive && timerSeconds > 0) {
+      interval = setInterval(() => {
+        setTimerSeconds((prev) => prev - 1);
+      }, 1000);
+    } else if (timerSeconds === 0) {
+      setTimerActive(false);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [timerActive, timerSeconds]);
 
   const fetchUserData = async () => {
     const token = getToken();
@@ -1069,158 +1134,376 @@ const renderHealthTab = () => (
     </div>
   );
 
-  const renderTrainingTab = () => (
-    <div className="space-y-6 pb-24">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Training</h1>
-        <p className="text-sm text-gray-400">Track your daily habits</p>
-      </div>
+  const renderTrainingTab = () => {
+    // Session Volume Aggregator Logic
+    const totalVolume = workoutRoutine.reduce((total, item) => {
+      if (item.isCompleted) {
+        const numericWeight = parseFloat(item.weight.replace(/[^0-9.]/g, "")) || 0;
+        return total + (item.sets * item.reps * numericWeight);
+      }
+      return total;
+    }, 0);
 
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">💧</span>
+    // 1RM Calculation Logic
+    const handleCalculate1RM = () => {
+      const w = parseFloat(ormWeight);
+      const r = parseFloat(ormReps);
+      if (!w || !r) return;
+      // Epley Formula implementation
+      const orm = w * (1 + r / 30);
+      setCalculatedOrm(Math.round(orm * 10) / 10);
+    };
+
+    return (
+      <div className="space-y-6 pb-24">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Training Hub</h1>
+          <p className="text-sm text-gray-400">Manage your routines and real-time workout telemetry</p>
+        </div>
+
+        {/* ================= HUD REST TIMER BAR ================= */}
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">⏱️</span>
+              <p className="text-xs font-black uppercase tracking-widest text-gray-400">Tactical Rest HUD</p>
+            </div>
+            {timerSeconds > 0 && (
+              <span className="text-xs font-mono text-red-400 animate-pulse bg-red-500/10 px-2 py-0.5 rounded-sm">
+                Rest Active
+              </span>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-4 bg-black/40 p-4 rounded-2xl border border-white/5">
+            <div className="w-24 text-center border-r border-white/10 pr-2">
+              <p className="font-mono text-3xl font-black text-white">
+                {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+              </p>
+              <p className="text-[9px] uppercase font-bold text-neutral-500 tracking-wider mt-0.5">Countdown</p>
+            </div>
+
+            <div className="flex-1 grid grid-cols-3 gap-2">
+              {[45, 60, 90].map((seconds) => (
+                <button
+                  key={seconds}
+                  onClick={() => {
+                    setTimerSeconds(seconds);
+                    setTimerActive(true);
+                  }}
+                  className="py-2 text-xs font-mono font-bold rounded-xl border border-white/5 bg-neutral-900 text-gray-300 hover:text-white hover:border-red-500/40 transition active:scale-95"
+                >
+                  {seconds}s
+                </button>
+              ))}
+            </div>
+            
+            {timerSeconds > 0 && (
+              <button
+                onClick={() => {
+                  setTimerActive(!timerActive);
+                }}
+                className={`p-2.5 rounded-xl text-xs font-bold uppercase ${timerActive ? 'bg-amber-600' : 'bg-green-600'} text-white`}
+              >
+                {timerActive ? "Pause" : "Resume"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ================= DIGITAL WORKOUT CHART MODULE ================= */}
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-5 shadow-xl">
+          <div className="mb-4 flex items-center justify-between">
             <div>
-              <p className="font-semibold text-white">Daily Hydration</p>
-              <p className="text-xs text-gray-400">Goal: 8 glasses (2L)</p>
+              <h3 className="text-sm font-black text-white tracking-widest uppercase">Digital Routine Card</h3>
+              <p className="text-[11px] text-gray-400">Ditch the notebook. Edit and track sets instantly.</p>
             </div>
+            <button
+              onClick={async () => {
+                setIsSavingRoutine(true);
+                try {
+                  const token = getToken();
+                  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/routine`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                    body: JSON.stringify({ routine: workoutRoutine }),
+                  });
+                  setSuccessMessage("Routine Chart synced successfully! ✅");
+                  setTimeout(() => setSuccessMessage(""), 3000);
+                } catch (err) {
+                  console.error("Failed to save routine", err);
+                  setError("Could not establish cloud save matrix.");
+                } finally {
+                  setIsSavingRoutine(false);
+                }
+              }}
+              disabled={isSavingRoutine}
+              className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-red-700 active:scale-95 disabled:opacity-50"
+            >
+              {isSavingRoutine ? "Saving..." : "Save Chart"}
+            </button>
           </div>
-          <p className="text-2xl font-bold text-blue-400">{dailyHydration} / 8</p>
+
+          {/* Volume Tracker Overlay */}
+          <div className="mb-4 rounded-xl bg-neutral-900/60 border border-white/5 p-3 flex items-center justify-between">
+            <span className="text-xs text-neutral-400 font-bold uppercase tracking-wide">Logged Session Volume:</span>
+            <span className="text-sm font-mono font-black text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.3)]">
+              {totalVolume} kg Moved
+            </span>
+          </div>
+
+          {/* Exercise Table Stack */}
+          <div className="space-y-3">
+            {workoutRoutine.map((item, index) => (
+              <div 
+                key={item.id} 
+                className={`flex flex-col gap-2 rounded-2xl border p-3 transition-all duration-300 ${
+                  item.isCompleted ? 'border-green-500/30 bg-green-950/10 opacity-70' : 'border-white/5 bg-black/40'
+                }`}
+              >
+                {/* Top Row Configuration */}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={item.isCompleted || false}
+                    onChange={(e) => {
+                      const updated = [...workoutRoutine];
+                      updated[index].isCompleted = e.target.checked;
+                      setWorkoutRoutine(updated);
+                    }}
+                    className="h-5 w-5 rounded border-white/20 bg-black text-red-600 focus:ring-0 focus:ring-offset-0 accent-red-600"
+                  />
+                  <input
+                    type="text"
+                    value={item.exercise}
+                    placeholder="Exercise Name"
+                    onChange={(e) => {
+                      const updated = [...workoutRoutine];
+                      updated[index].exercise = e.target.value;
+                      setWorkoutRoutine(updated);
+                    }}
+                    className="w-full bg-transparent text-sm font-bold text-white placeholder-neutral-600 focus:outline-none focus:border-b focus:border-red-500/50"
+                  />
+                  <button
+                    onClick={() => {
+                      setWorkoutRoutine(workoutRoutine.filter((_, i) => i !== index));
+                    }}
+                    className="text-neutral-500 hover:text-red-400 text-sm px-1 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Sub Matrix Data Fields (Sets * Reps @ Weight) */}
+                <div className="grid grid-cols-3 gap-2 pl-8 text-xs">
+                  <div className="flex items-center bg-neutral-900/80 rounded-lg px-2 border border-white/5">
+                    <span className="text-[10px] text-neutral-500 mr-1 font-bold uppercase">Sets:</span>
+                    <input
+                      type="number"
+                      value={item.sets || ""}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const updated = [...workoutRoutine];
+                        updated[index].sets = parseInt(e.target.value) || 0;
+                        setWorkoutRoutine(updated);
+                      }}
+                      className="w-full bg-transparent text-white font-mono focus:outline-none text-center"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center bg-neutral-900/80 rounded-lg px-2 border border-white/5">
+                    <span className="text-[10px] text-neutral-500 mr-1 font-bold uppercase">Reps:</span>
+                    <input
+                      type="number"
+                      value={item.reps || ""}
+                      placeholder="0"
+                      onChange={(e) => {
+                        const updated = [...workoutRoutine];
+                        updated[index].reps = parseInt(e.target.value) || 0;
+                        setWorkoutRoutine(updated);
+                      }}
+                      className="w-full bg-transparent text-white font-mono focus:outline-none text-center"
+                    />
+                  </div>
+
+                  <div className="flex items-center bg-neutral-900/80 rounded-lg px-2 border border-white/5">
+                    <span className="text-[10px] text-neutral-500 mr-1 font-bold uppercase">Wt:</span>
+                    <input
+                      type="text"
+                      value={item.weight}
+                      placeholder="eg. 60kg"
+                      onChange={(e) => {
+                        const updated = [...workoutRoutine];
+                        updated[index].weight = e.target.value;
+                        setWorkoutRoutine(updated);
+                      }}
+                      className="w-full bg-transparent text-white font-mono focus:outline-none text-xs text-center"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Row Creation Link */}
+            <button
+              onClick={() => {
+                setWorkoutRoutine([
+                  ...workoutRoutine,
+                  { id: Date.now().toString(), exercise: "", sets: 0, reps: 0, weight: "" }
+                ]);
+              }}
+              className="w-full rounded-xl border border-dashed border-white/10 bg-transparent py-2.5 text-xs font-semibold text-neutral-400 transition hover:border-red-500/30 hover:text-white"
+            >
+              + Add Custom Exercise
+            </button>
+          </div>
         </div>
-        <div className="mb-4 h-3 overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
-            style={{ width: `${Math.min((dailyHydration / 8) * 100, 100)}%` }}
-          />
-        </div>
-        <div className="flex gap-2">
+
+        {/* ================= 1-REP MAX CALCULATOR MATRIX ================= */}
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-5">
+          <h4 className="text-xs font-black uppercase tracking-widest text-red-500 mb-3">1RM Combat Calculator</h4>
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <input
+              type="number"
+              placeholder="Weight (kg)"
+              value={ormWeight}
+              onChange={(e) => setOrmWeight(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-red-500"
+            />
+            <input
+              type="number"
+              placeholder="Reps Done"
+              value={ormReps}
+              onChange={(e) => setOrmReps(e.target.value)}
+              className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-xs text-white focus:outline-none focus:border-red-500"
+            />
+          </div>
           <button
-            onClick={() => setDailyHydration(Math.max(0, dailyHydration - 1))}
-            className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-blue-500/30 hover:bg-blue-500/10"
+            onClick={handleCalculate1RM}
+            className="w-full rounded-xl bg-neutral-900 border border-white/10 py-2.5 text-xs font-bold uppercase tracking-wider text-white transition hover:border-red-500/40"
           >
-            -1 Glass
+            Compute Max Capacity
           </button>
-          <button
-            onClick={() => setDailyHydration(Math.min(8, dailyHydration + 1))}
-            className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            +1 Glass
-          </button>
+          {calculatedOrm !== null && (
+            <p className="text-center text-xs text-gray-400 mt-3 bg-black/30 py-2 rounded-xl border border-white/5">
+              Estimated Max Single Lift: <span className="text-red-400 font-mono font-black text-sm ml-1">{calculatedOrm} kg</span>
+            </p>
+          )}
         </div>
-      </div>
 
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <div className="mb-4 flex items-center gap-3">
-          <span className="text-3xl">😴</span>
-          <div>
-            <p className="font-semibold text-white">Sleep Hours</p>
-            <p className="text-xs text-gray-400">Log your daily sleep</p>
+        {/* ================= LEGACY HABITS METRICS SECTIONS ================= */}
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-3xl">💧</span>
+              <div>
+                <p className="font-semibold text-white">Daily Hydration</p>
+                <p className="text-xs text-gray-400">Goal: 8 glasses (2L)</p>
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-blue-400">{dailyHydration} / 8</p>
+          </div>
+          <div className="mb-4 h-3 overflow-hidden rounded-full bg-white/10">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
+              style={{ width: `${Math.min((dailyHydration / 8) * 100, 100)}%` }}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setDailyHydration(Math.max(0, dailyHydration - 1))}
+              className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:border-blue-500/30 hover:bg-blue-500/10"
+            >
+              -1 Glass
+            </button>
+            <button
+              onClick={() => setDailyHydration(Math.min(8, dailyHydration + 1))}
+              className="flex-1 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              +1 Glass
+            </button>
           </div>
         </div>
-        <div className="mb-4">
-          <label className="mb-2 block text-sm font-semibold text-gray-400">Hours slept today</label>
-          <input
-            type="range"
-            min="0"
-            max="12"
-            step="0.5"
-            value={dailySleep}
-            onChange={(e) => setDailySleep(parseFloat(e.target.value))}
-            className="w-full accent-purple-500"
-          />
-          <div className="mt-2 flex justify-between text-xs text-gray-400">
-            <span>0h</span>
-            <span className="text-lg font-bold text-purple-400">{dailySleep}h</span>
-            <span>12h</span>
-          </div>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-          <p className="text-xs text-gray-400">
-            {dailySleep < 6
-              ? "⚠️ Low sleep - aim for 7-9 hours for optimal recovery"
-              : dailySleep >= 7 && dailySleep <= 9
-              ? "✅ Optimal sleep range for muscle recovery"
-              : dailySleep > 9
-              ? "💤 Extended sleep - ensure you're maintaining consistency"
-              : "Track your sleep to optimize recovery"}
-          </p>
-        </div>
-      </div>
 
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Daily Checklist</p>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🏋️</span>
-              <span className="text-sm font-semibold text-white">Workout Completed</span>
+        <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="text-3xl">😴</span>
+            <div>
+              <p className="font-semibold text-white">Sleep Hours</p>
+              <p className="text-xs text-gray-400">Log your daily sleep</p>
             </div>
-            <input 
-  type="checkbox" 
-  className="h-5 w-5 accent-red-500" 
-  checked={checklist.workout}
-  onChange={(e) => setChecklist({ ...checklist, workout: e.target.checked })}
-/>
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🥗</span>
-              <span className="text-sm font-semibold text-white">Healthy Meals</span>
+          <div className="mb-4">
+            <label className="mb-2 block text-sm font-semibold text-gray-400">Hours slept today</label>
+            <input
+              type="range"
+              min="0"
+              max="12"
+              step="0.5"
+              value={dailySleep}
+              onChange={(e) => setDailySleep(parseFloat(e.target.value))}
+              className="w-full accent-purple-500"
+            />
+            <div className="mt-2 flex justify-between text-xs text-gray-400">
+              <span>0h</span>
+              <span className="text-lg font-bold text-purple-400">{dailySleep}h</span>
+              <span>12h</span>
             </div>
-            <input 
-  type="checkbox" 
-  className="h-5 w-5 accent-red-500" 
-  checked={checklist.meals}
-  onChange={(e) => setChecklist({ ...checklist, meals: e.target.checked })}
-/>
           </div>
-          <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 p-3">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🧘</span>
-              <span className="text-sm font-semibold text-white">Stretching</span>
-            </div>
-            <input 
-  type="checkbox" 
-  className="h-5 w-5 accent-red-500" 
-  checked={checklist.stretching}
-  onChange={(e) => setChecklist({ ...checklist, stretching: e.target.checked })}
-/>
+          <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+            <p className="text-xs text-gray-400">
+              {dailySleep < 6
+                ? "⚠️ Low sleep - aim for 7-9 hours for optimal recovery"
+                : dailySleep >= 7 && dailySleep <= 9
+                ? "✅ Optimal sleep range for muscle recovery"
+                : dailySleep > 9
+                ? "💤 Extended sleep - ensure you're maintaining consistency"
+                : "Track your sleep to optimize recovery"}
+            </p>
           </div>
         </div>
-      </div>
 
-      <button
-        onClick={handleSaveTraining}
-        disabled={savingTraining || (dailyHydration === 0 && dailySleep === 0)}
-        className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {savingTraining ? "Saving..." : "Save Daily Training Data"}
-      </button>
-    </div>
-  );
+        {/* Global Habits Save Controls */}
+        <button
+          onClick={handleSaveTraining}
+          disabled={savingTraining || (dailyHydration === 0 && dailySleep === 0)}
+          className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {savingTraining ? "Saving..." : "Save Habit Tracking Data"}
+        </button>
+      </div>
+    );
+  };
 
   const renderProfileTab = () => (
-    <div className="space-y-6 pb-24">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Profile</h1>
-        <p className="text-sm text-gray-400">Manage your account</p>
-      </div>
+    <div className="space-y-8 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      
+      {/* 1. Hero Avatar Section */}
+      <div className="relative flex flex-col items-center justify-center pt-8 pb-4">
+        {/* Ambient Glow Behind Avatar */}
+        <div className="absolute top-0 h-40 w-full bg-gradient-to-b from-red-600/10 via-red-900/5 to-transparent blur-2xl pointer-events-none" />
 
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Profile Picture</p>
-        <div className="flex items-center gap-4">
-          <div className="relative">
-            <div className="h-20 w-20 overflow-hidden rounded-full border-2 border-red-500 bg-gray-800">
+        <div className="relative z-10">
+          {/* Glowing Avatar Wrapper */}
+          <div className="relative h-28 w-28 rounded-full bg-gradient-to-br from-red-500 via-[#1a1a20] to-black p-1 shadow-[0_0_30px_-5px_rgba(239,68,68,0.3)]">
+            <div className="h-full w-full overflow-hidden rounded-full border-2 border-[#0B0B0F] bg-[#111116]">
               {user?.profilePicture ? (
-                <img src={user.profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                <img 
+                  src={user.profilePicture} 
+                  alt="Profile" 
+                  className="h-full w-full object-cover transition-transform duration-500 hover:scale-110" 
+                />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-3xl">
-                  👤
-                </div>
+                <div className="flex h-full w-full items-center justify-center text-4xl">👤</div>
               )}
             </div>
-            <label className="absolute bottom-0 right-0 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-red-600 text-white shadow-lg">
-              <span className="text-sm">📷</span>
+            
+            {/* Upload Button */}
+            <label className="absolute bottom-0 right-0 flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-4 border-[#0B0B0F] bg-red-600 text-white shadow-lg transition-transform hover:scale-110 active:scale-95">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
               <input
                 type="file"
                 accept="image/*"
@@ -1230,129 +1513,164 @@ const renderHealthTab = () => (
               />
             </label>
           </div>
-          <div>
-            <p className="font-semibold text-white">{user?.name || "Member"}</p>
-            <p className="text-sm text-gray-400">{user?.email}</p>
+        </div>
+
+        {/* Name and Status Badge */}
+        <div className="mt-5 text-center relative z-10">
+          <h2 className="text-2xl font-black text-white tracking-wide">{user?.name || "VIP Member"}</h2>
+          <p className="text-xs font-mono text-gray-400 mt-1">{user?.email}</p>
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1.5 border border-white/10 shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-gray-300">
+              {user?.role || "Member"} Clearance
+            </span>
           </div>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/10 bg-[#16161F] p-6">
-        <p className="mb-4 text-sm font-semibold text-gray-400">Account Details</p>
-        <div className="space-y-4">
-          <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Full Name
+      {/* 2. Identity & Biometrics Card */}
+      <div className="rounded-3xl border border-white/5 bg-[#0e0e12] p-6 shadow-2xl relative overflow-hidden">
+        {/* Subtle Carbon Fiber Pattern Overlay */}
+        <div className="absolute inset-0 opacity-20 bg-[repeating-linear-gradient(45deg,transparent,transparent_2px,rgba(255,255,255,0.02)_2px,rgba(255,255,255,0.02)_4px)] pointer-events-none" />
+
+        <div className="relative z-10 flex items-center gap-2 mb-6">
+          <div className="h-3 w-1 rounded-full bg-red-500" />
+          <h3 className="text-[11px] font-black uppercase tracking-widest text-gray-400">Identity & Protocol</h3>
+        </div>
+
+        <div className="relative z-10 space-y-5">
+          {/* Input Group: Full Name */}
+          <div className="group">
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500 transition-colors group-focus-within:text-red-400">
+              Full Legal Name
             </label>
             <input
               type="text"
               value={profileForm.fullName}
               onChange={(e) => setProfileForm({ ...profileForm, fullName: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
+              className="w-full rounded-2xl border border-white/5 bg-[#141419] px-4 py-3.5 text-sm font-bold text-white transition-all placeholder:text-gray-600 focus:border-red-500/50 focus:bg-[#1a1a20] focus:outline-none focus:ring-2 focus:ring-red-500/20"
               placeholder="Enter your full name"
             />
           </div>
 
-          <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Email
-            </label>
-            <input
-              type="email"
-              value={user?.email || ""}
-              disabled
-              className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-gray-400 placeholder-gray-500 focus:outline-none"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            {/* Input Group: Phone */}
+            <div className="group">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500 transition-colors group-focus-within:text-red-400">
+                Mobile Comms
+              </label>
+              <input
+                type="tel"
+                value={profileForm.mobileNumber}
+                onChange={(e) => setProfileForm({ ...profileForm, mobileNumber: e.target.value })}
+                className="w-full rounded-2xl border border-white/5 bg-[#141419] px-4 py-3.5 text-sm font-bold text-white transition-all placeholder:text-gray-600 focus:border-red-500/50 focus:bg-[#1a1a20] focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                placeholder="Phone number"
+              />
+            </div>
+
+            {/* Input Group: Height */}
+            <div className="group">
+              <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500 transition-colors group-focus-within:text-red-400">
+                Height (cm)
+              </label>
+              <input
+                type="number"
+                value={profileForm.height}
+                onChange={(e) => setProfileForm({ ...profileForm, height: e.target.value })}
+                className="w-full rounded-2xl border border-white/5 bg-[#141419] px-4 py-3.5 text-sm font-bold text-white transition-all placeholder:text-gray-600 focus:border-red-500/50 focus:bg-[#1a1a20] focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                placeholder="Height"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Phone Number
-            </label>
-            <input
-              type="tel"
-              value={profileForm.mobileNumber}
-              onChange={(e) => setProfileForm({ ...profileForm, mobileNumber: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
-              placeholder="Enter your phone number"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Height (cm)
-            </label>
-            <input
-              type="number"
-              value={profileForm.height}
-              onChange={(e) => setProfileForm({ ...profileForm, height: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none"
-              placeholder="Enter your height in cm"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Fitness Goals
+          {/* Input Group: Goals */}
+          <div className="group">
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-gray-500 transition-colors group-focus-within:text-red-400">
+              Primary Directive (Goals)
             </label>
             <textarea
               value={profileForm.fitnessGoals}
               onChange={(e) => setProfileForm({ ...profileForm, fitnessGoals: e.target.value })}
-              className="w-full rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-white placeholder-gray-500 focus:border-red-500/50 focus:outline-none resize-none"
+              className="w-full rounded-2xl border border-white/5 bg-[#141419] px-4 py-3.5 text-sm font-bold text-white transition-all placeholder:text-gray-600 focus:border-red-500/50 focus:bg-[#1a1a20] focus:outline-none focus:ring-2 focus:ring-red-500/20 resize-none"
               rows={3}
-              placeholder="Describe your fitness goals"
+              placeholder="What are we building towards?"
             />
           </div>
 
           <button
             onClick={handleSaveProfile}
             disabled={savingProfile}
-            className="w-full rounded-xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-2 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-red-600 to-red-800 px-4 py-4 text-xs font-black uppercase tracking-widest text-white transition-all hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(220,38,38,0.3)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50 relative group"
           >
-            {savingProfile ? "Saving..." : "Save Changes"}
+            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
+            <span className="relative z-10">{savingProfile ? "Syncing Data..." : "Update Protocol"}</span>
           </button>
         </div>
       </div>
 
-      {user?.role === "admin" && (
+      {/* 3. System Actions Area */}
+      <div className="space-y-3">
+        {user?.role === "admin" && (
+          <button
+            onClick={() => router.push("/admin")}
+            className="group flex w-full items-center justify-between rounded-2xl border border-amber-500/20 bg-[#16110b] p-4 transition-all hover:bg-amber-500/10 hover:border-amber-500/40 shadow-lg"
+          >
+            <div className="flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/10 text-amber-500 group-hover:scale-110 group-hover:bg-amber-500/20 transition-all">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.95 11.95 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+              </div>
+              <div className="text-left">
+                <span className="block text-sm font-bold text-amber-500">Command Override</span>
+                <span className="block text-[10px] text-amber-500/70 uppercase tracking-wider mt-0.5">Access Admin Panel</span>
+              </div>
+            </div>
+            <span className="text-amber-500/50 group-hover:translate-x-1 group-hover:text-amber-500 transition-all">→</span>
+          </button>
+        )}
+
         <button
-          onClick={() => router.push("/admin")}
-          className="flex w-full items-center justify-between rounded-3xl border border-red-500/30 bg-red-500/10 p-4 transition hover:bg-red-500/20"
+          onClick={() => {
+            const deferredPrompt = (window as any).deferredPrompt;
+            if (deferredPrompt) {
+              deferredPrompt.prompt();
+            }
+          }}
+          className="group flex w-full items-center justify-between rounded-2xl border border-white/5 bg-[#0e0e12] p-4 transition-all hover:bg-[#141419] hover:border-white/10 shadow-lg"
         >
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">🔐</span>
-            <span className="font-semibold text-red-400">Go to Admin Panel</span>
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-500/10 text-blue-400 group-hover:scale-110 group-hover:bg-blue-500/20 transition-all">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <span className="block text-sm font-bold text-white">Install Application</span>
+              <span className="block text-[10px] text-gray-500 uppercase tracking-wider mt-0.5">Add to Home Screen</span>
+            </div>
           </div>
-          <span className="text-red-400">→</span>
+          <span className="text-gray-600 group-hover:translate-x-1 group-hover:text-white transition-all">→</span>
         </button>
-      )}
 
-      <button
-        onClick={() => {
-          const deferredPrompt = (window as any).deferredPrompt;
-          if (deferredPrompt) {
-            deferredPrompt.prompt();
-          }
-        }}
-        className="flex w-full items-center justify-between rounded-3xl border border-white/10 bg-[#16161F] p-4 transition hover:border-red-500/30"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">📲</span>
-          <span className="font-semibold text-white">Install App</span>
-        </div>
-        <span className="text-gray-400">→</span>
-      </button>
-
-      <button
-        onClick={handleLogout}
-        className="flex w-full items-center justify-between rounded-3xl border border-red-500/30 bg-red-500/10 p-4 transition hover:bg-red-500/20"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🚪</span>
-          <span className="font-semibold text-red-400">Logout</span>
-        </div>
-        <span className="text-red-400">→</span>
-      </button>
+        <button
+          onClick={handleLogout}
+          className="group flex w-full items-center justify-between rounded-2xl border border-white/5 bg-[#0e0e12] p-4 transition-all hover:bg-red-950/20 hover:border-red-500/30 shadow-lg"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-500/10 text-red-500 group-hover:scale-110 group-hover:bg-red-500/20 transition-all">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <span className="block text-sm font-bold text-red-500">Terminate Session</span>
+              <span className="block text-[10px] text-red-500/70 uppercase tracking-wider mt-0.5">Secure Logout</span>
+            </div>
+          </div>
+          <span className="text-red-500/50 group-hover:translate-x-1 group-hover:text-red-500 transition-all">→</span>
+        </button>
+      </div>
     </div>
   );
 
