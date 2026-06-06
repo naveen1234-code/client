@@ -82,6 +82,7 @@ const turnstileWidgetIdRef = useRef<string | null>(null);
     memberSignature: "",
     isLegacyMember: false,
     claimedPhone: "",
+    startDay: "",
     startMonth: "",
     startYear: "",
     previousPlan: "",
@@ -378,6 +379,7 @@ useEffect(() => {
         // Nest the legacy details fields cleanly here:
         legacyDetails: formData.isLegacyMember ? {
           claimedPhoneNumber: formData.claimedPhone,
+          startDay: formData.startDay,
           startMonth: formData.startMonth,
           startYear: formData.startYear,
           previousMembershipPlanType: formData.previousPlan
@@ -713,6 +715,23 @@ useEffect(() => {
                         className={inputClass}
                       />
                     </div>
+                    <div className="mt-4">
+          <label className={labelClass}>Start Day</label>
+          <select
+            name="startDay"
+            value={formData.startDay}
+            onChange={handleChange}
+            className={selectClass}
+          >
+            <option value="">Select day</option>
+            {Array.from({ length: 31 }, (_, i) => {
+              const day = String(i + 1).padStart(2, "0");
+              return (
+                <option key={day} value={day}>{day}</option>
+              );
+            })}
+          </select>
+        </div>
                     <div className="mt-4">
                       <label className={labelClass}>Start Month</label>
                       <select

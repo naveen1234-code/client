@@ -92,6 +92,7 @@ type LegacyClaimType = {
   claimId: string;
   legacyPlan: string;
   claimedPhoneNumber?: string;
+  startDay?: string;
   startMonth?: string;
   startYear?: string;
   status: string;
@@ -223,6 +224,7 @@ export default function AdminPage() {
   const [editingClaimId, setEditingClaimId] = useState<string | null>(null);
   const [editClaimForm, setEditClaimForm] = useState({
     claimedPhoneNumber: "",
+    startDay: "",
     startMonth: "",
     startYear: "",
     previousMembershipPlanType: "",
@@ -269,7 +271,7 @@ export default function AdminPage() {
       const displayName = (user.fullName || user.name || "").toLowerCase();
       return (
         displayName.includes(memberSearchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(memberSearchQuery.toLowerCase())
+        (user.email || "").toLowerCase().includes(memberSearchQuery.toLowerCase())
       );
     });
   }, [users, memberSearchQuery]);
@@ -284,7 +286,7 @@ export default function AdminPage() {
       const displayName = (user.fullName || user.name || "").toLowerCase();
       return (
         displayName.includes(manualSearchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(manualSearchQuery.toLowerCase())
+        (user.email || "").toLowerCase().includes(manualSearchQuery.toLowerCase())
       );
     });
   }, [users, manualSearchQuery]);
@@ -387,6 +389,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
       const token = getToken();
 
       if (!token) {
+        setLoading(false);
         router.push("/login");
         return;
       }
@@ -403,11 +406,13 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
         if (!meRes.ok) {
           localStorage.removeItem("token");
           localStorage.removeItem("userRole");
+          setLoading(false);
           router.push("/login");
           return;
         }
 
         if (meData.role !== "admin") {
+          setLoading(false); // <-- This is the fix
           router.push("/dashboard");
           return;
         }
@@ -497,37 +502,34 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
   useEffect(() => {
     if (!isAdminVerified) return;
 
-    let interval: ReturnType<typeof setInterval> | null = null;
+    let timeoutId: NodeJS.Timeout;
+    let isPolling = true;
 
-    const startPolling = () => {
-      if (interval) clearInterval(interval);
-      interval = setInterval(() => {
-        refreshAccessLogs();
-      }, 10000);
-    };
-
-    const stopPolling = () => {
-      if (interval) {
-        clearInterval(interval);
-        interval = null;
+    const pollData = async () => {
+      if (!isPolling) return;
+      
+      if (!document.hidden) {
+        await refreshAccessLogs(); 
+      }
+      
+      if (isPolling) {
+        // Slowed down to 25 seconds to avoid database bottlenecking
+        timeoutId = setTimeout(pollData, 25000);
       }
     };
+
+    pollData();
 
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        stopPolling();
-      } else {
-        refreshAccessLogs();
-        startPolling();
-      }
+      if (!document.hidden) refreshAccessLogs();
     };
 
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      stopPolling();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      isPolling = false;
+      clearTimeout(timeoutId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [isAdminVerified]);
 
@@ -667,6 +669,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
     setEditingClaimId(claim._id);
     setEditClaimForm({
       claimedPhoneNumber: claim.claimedPhoneNumber || "",
+      startDay: claim.startDay || "",
       startMonth: claim.startMonth || "",
       startYear: claim.startYear || "",
       previousMembershipPlanType: claim.legacyPlan || "",
@@ -778,7 +781,7 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
       if (insideRes.ok) setInsideMembers(insideData);
       if (statsRes.ok) setAccessStats(statsData);
 
-      await refreshUsers();
+      // REMOVED await refreshUsers() from here to save your server's life!
     } catch (refreshError) {
       console.error("Failed to refresh access data", refreshError);
     }
@@ -912,14 +915,14 @@ const [showSmartAdvanced, setShowSmartAdvanced] = useState(false);
     (selectedSmartMember.totalDays ?? 0) !== smartMembershipFinalValues.totalDays ||
     (selectedSmartMember.remainingDays ?? 0) !== smartMembershipFinalValues.remainingDays;
 
-  const startChanged =
+  const startChanged = 
     (selectedSmartMember.membershipStartDate
-      ? new Date(selectedSmartMember.membershipStartDate).toISOString().split("T")[0]
+      ? selectedSmartMember.membershipStartDate.split("T")[0]
       : "") !== (smartMembershipFinalValues.membershipStartDate || "");
 
   const endChanged =
     (selectedSmartMember.membershipEndDate
-      ? new Date(selectedSmartMember.membershipEndDate).toISOString().split("T")[0]
+      ? selectedSmartMember.membershipEndDate.split("T")[0]
       : "") !== (smartMembershipFinalValues.membershipEndDate || "");
 
   const daysGoingToZero =
@@ -1409,7 +1412,7 @@ const handleSelectUser = (user: UserType) => {
       const displayName = (user.fullName || user.name || "").toLowerCase();
       const matchesSearch =
         displayName.includes(debouncedSearchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+        (user.email || "").toLowerCase().includes(debouncedSearchTerm.toLowerCase());
 
       const matchesStatus =
         statusFilter === "all" || user.membershipStatus === statusFilter;
@@ -3823,7 +3826,10 @@ const integrationStatusCards = useMemo(
                           Start Date
                         </p>
                         <p className="mt-2 text-sm font-semibold text-white">
-                          {claim.startMonth && claim.startYear ? `${claim.startMonth} ${claim.startYear}` : "No date provided"}
+                          {/* UPDATED EXPRESSION TO INCLUDE DAY 👇 */}
+                          {claim.startMonth && claim.startYear 
+                            ? `${claim.startDay ? claim.startDay + " " : ""}${claim.startMonth} ${claim.startYear}` 
+                            : "No date provided"}
                         </p>
                       </div>
 
@@ -3911,6 +3917,22 @@ const integrationStatusCards = useMemo(
                             className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
                             placeholder="Enter phone number"
                           />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
+                            Start Day
+                          </label>
+                          <select
+                            value={editClaimForm.startDay}
+                            onChange={(e) => setEditClaimForm({ ...editClaimForm, startDay: e.target.value })}
+                            className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm text-white outline-none transition focus:border-blue-500"
+                          >
+                            <option value="">Select day</option>
+                            {Array.from({ length: 31 }, (_, i) => {
+                              const day = String(i + 1).padStart(2, "0");
+                              return <option key={day} value={day}>{day}</option>;
+                            })}
+                          </select>
                         </div>
                         <div>
                           <label className="block text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500 mb-2">
